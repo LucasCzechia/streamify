@@ -47,8 +47,17 @@ class StreamController {
         }
 
         const isYouTube = source === 'youtube' || source === 'spotify';
+        const isLive = this.track.isLive === true || this.track.duration === 0;
+
+        let formatString;
+        if (isLive) {
+            formatString = 'bestaudio[ext=webm]/bestaudio/best';
+        } else {
+            formatString = isYouTube ? '18/22/bestaudio[ext=webm]/bestaudio/best' : 'bestaudio/best';
+        }
+
         const ytdlpArgs = [
-            '-f', isYouTube ? '18/22/bestaudio[ext=webm]/bestaudio/best' : 'bestaudio/best',
+            '-f', formatString,
             '--no-playlist',
             '--no-check-certificates',
             '--no-warnings',
@@ -57,6 +66,11 @@ class StreamController {
             '-o', '-',
             url
         ];
+
+        if (isLive) {
+            ytdlpArgs.push('--live-from-start');
+            log.info('STREAM', `Live stream detected, using live-compatible format`);
+        }
 
         if (isYouTube) {
             ytdlpArgs.push('--extractor-args', 'youtube:player_client=web_creator');
@@ -163,7 +177,7 @@ class StreamController {
             }
         });
 
-        await this._waitForData();
+        await this._waitForData(isLive);
 
         this.resource = createAudioResource(this.ffmpeg.stdout, {
             inputType: StreamType.OggOpus,
@@ -177,12 +191,13 @@ class StreamController {
         return this.resource;
     }
 
-    _waitForData() {
+    _waitForData(isLive = false) {
         return new Promise((resolve, reject) => {
+            const timeoutMs = isLive ? 30000 : 15000;
             const timeout = setTimeout(() => {
-                log.warn('STREAM', `Timeout waiting for data, proceeding anyway (received: ${this.bytesReceived})`);
+                log.warn('STREAM', `Timeout waiting for data, proceeding anyway (received: ${this.bytesReceived}, isLive: ${isLive})`);
                 resolve();
-            }, 15000);
+            }, timeoutMs);
 
             let resolved = false;
 

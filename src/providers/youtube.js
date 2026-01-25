@@ -39,12 +39,13 @@ async function search(query, limit, config) {
                 const tracks = (data.entries || []).map(entry => ({
                     id: entry.id,
                     title: entry.title,
-                    duration: entry.duration,
+                    duration: entry.duration || 0,
                     author: entry.channel || entry.uploader,
                     thumbnail: entry.thumbnails?.[0]?.url,
                     uri: `https://www.youtube.com/watch?v=${entry.id}`,
                     streamUrl: `/youtube/stream/${entry.id}`,
-                    source: 'youtube'
+                    source: 'youtube',
+                    isLive: entry.live_status === 'is_live' || entry.is_live === true || !entry.duration
                 }));
                 const elapsed = Date.now() - startTime;
                 log.info('YOUTUBE', `Found ${tracks.length} results (${elapsed}ms)`);
@@ -87,15 +88,17 @@ async function getInfo(videoId, config) {
             }
             try {
                 const data = JSON.parse(stdout);
+                const isLive = data.live_status === 'is_live' || data.is_live === true || !data.duration;
                 resolve({
                     id: data.id,
                     title: data.title,
-                    duration: data.duration,
+                    duration: data.duration || 0,
                     author: data.channel || data.uploader,
                     thumbnail: data.thumbnail,
                     uri: data.webpage_url,
                     streamUrl: `/youtube/stream/${data.id}`,
-                    source: 'youtube'
+                    source: 'youtube',
+                    isLive
                 });
             } catch (e) {
                 reject(new Error('Failed to parse yt-dlp output'));
@@ -238,12 +241,13 @@ async function getPlaylist(playlistId, config) {
                 const tracks = (data.entries || []).map(entry => ({
                     id: entry.id,
                     title: entry.title,
-                    duration: entry.duration,
+                    duration: entry.duration || 0,
                     author: entry.channel || entry.uploader,
                     thumbnail: entry.thumbnails?.[0]?.url,
                     uri: `https://www.youtube.com/watch?v=${entry.id}`,
                     streamUrl: `/youtube/stream/${entry.id}`,
-                    source: 'youtube'
+                    source: 'youtube',
+                    isLive: entry.live_status === 'is_live' || entry.is_live === true || !entry.duration
                 }));
                 log.info('YOUTUBE', `Playlist loaded: ${data.title || playlistId} (${tracks.length} tracks)`);
                 resolve({
