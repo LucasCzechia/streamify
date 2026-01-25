@@ -39,6 +39,23 @@ function findExecutable(name) {
     }
 }
 
+const MIN_YTDLP_VERSION = '2026.01.19';
+
+function checkYtdlpVersion(ytdlpPath) {
+    try {
+        const version = execSync(`"${ytdlpPath}" --version`, { encoding: 'utf-8' }).trim();
+        const versionDate = version.split('.').slice(0, 3).join('.');
+
+        if (versionDate < MIN_YTDLP_VERSION) {
+            console.warn(`[CONFIG] ⚠️  yt-dlp version ${version} is outdated`);
+            console.warn(`[CONFIG] ⚠️  Live YouTube streams require yt-dlp >= ${MIN_YTDLP_VERSION}`);
+            console.warn(`[CONFIG] ⚠️  Update with: yt-dlp --update-to nightly`);
+        }
+    } catch (e) {
+        console.warn('[CONFIG] Could not check yt-dlp version:', e.message);
+    }
+}
+
 function load(options = {}) {
     let fileConfig = {};
 
@@ -122,6 +139,8 @@ function load(options = {}) {
     if (!config.ffmpegPath) {
         throw new Error('ffmpeg not found. Install it: apt install ffmpeg');
     }
+
+    checkYtdlpVersion(config.ytdlpPath);
 
     return config;
 }
