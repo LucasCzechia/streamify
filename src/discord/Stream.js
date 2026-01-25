@@ -1,7 +1,15 @@
 const { spawn } = require('child_process');
-const { createAudioResource, StreamType } = require('@discordjs/voice');
 const { buildFfmpegArgs } = require('../filters/ffmpeg');
 const log = require('../utils/logger');
+
+let voiceModule;
+try {
+    voiceModule = require('@discordjs/voice');
+} catch (e) {
+    voiceModule = null;
+}
+
+const { createAudioResource, StreamType } = voiceModule || {};
 
 class StreamController {
     constructor(track, filters, config) {

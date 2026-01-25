@@ -1,4 +1,15 @@
 const { EventEmitter } = require('events');
+const Queue = require('./Queue');
+const { createStream } = require('./Stream');
+const log = require('../utils/logger');
+
+let voiceModule;
+try {
+    voiceModule = require('@discordjs/voice');
+} catch (e) {
+    voiceModule = {};
+}
+
 const {
     joinVoiceChannel,
     createAudioPlayer,
@@ -6,10 +17,7 @@ const {
     VoiceConnectionStatus,
     entersState,
     NoSubscriberBehavior
-} = require('@discordjs/voice');
-const Queue = require('./Queue');
-const { createStream } = require('./Stream');
-const log = require('../utils/logger');
+} = voiceModule;
 
 class Player extends EventEmitter {
     constructor(manager, options) {

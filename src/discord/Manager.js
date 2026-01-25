@@ -6,9 +6,40 @@ const soundcloud = require('../providers/soundcloud');
 const log = require('../utils/logger');
 const { loadConfig } = require('../config');
 
+function checkDependencies() {
+    const missing = [];
+
+    try {
+        require('@discordjs/voice');
+    } catch (e) {
+        missing.push('@discordjs/voice');
+    }
+
+    try {
+        require('@discordjs/opus');
+    } catch (e) {
+        try {
+            require('opusscript');
+        } catch (e2) {
+            missing.push('@discordjs/opus (or opusscript)');
+        }
+    }
+
+    if (missing.length > 0) {
+        throw new Error(
+            `Missing required dependencies for Discord mode:\n\n` +
+            `  npm install ${missing.join(' ')}\n\n` +
+            `These packages are required for voice playback.`
+        );
+    }
+}
+
 class Manager extends EventEmitter {
     constructor(client, options = {}) {
         super();
+
+        checkDependencies();
+
         this.client = client;
         this.players = new Map();
 
