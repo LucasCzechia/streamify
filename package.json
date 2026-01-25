@@ -48,6 +48,10 @@
   },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/LucasCzechia/streamify.git"
+  },
+  "homepage": "https://github.com/LucasCzechia/streamify#readme",
+  "bugs": {
+    "url": "https://github.com/LucasCzechia/streamify/issues"
   }
 }
