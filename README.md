@@ -346,6 +346,11 @@ const manager = new Streamify.Manager(client, {
     ytdlpPath: '/usr/local/bin/yt-dlp',
     ffmpegPath: '/usr/bin/ffmpeg',
     cookiesPath: './cookies.txt',
+    providers: {
+        youtube: { enabled: true },
+        spotify: { enabled: true },
+        soundcloud: { enabled: false }  // Disable SoundCloud
+    },
     spotify: {
         clientId: 'your_client_id',
         clientSecret: 'your_client_secret'
@@ -372,6 +377,11 @@ const streamify = new Streamify({
     ytdlpPath: '/usr/local/bin/yt-dlp',
     ffmpegPath: '/usr/bin/ffmpeg',
     cookiesPath: './cookies.txt',
+    providers: {
+        youtube: { enabled: true },
+        spotify: { enabled: true },
+        soundcloud: { enabled: true }
+    },
     spotify: {
         clientId: 'your_client_id',
         clientSecret: 'your_client_secret'

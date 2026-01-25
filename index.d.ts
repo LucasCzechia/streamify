@@ -78,6 +78,16 @@ declare module 'streamify-audio' {
     // HTTP Server Mode
     // ========================================================================
 
+    export interface ProviderConfig {
+        enabled?: boolean;
+    }
+
+    export interface ProvidersConfig {
+        youtube?: ProviderConfig;
+        spotify?: ProviderConfig;
+        soundcloud?: ProviderConfig;
+    }
+
     export interface StreamifyOptions {
         port?: number;
         host?: string;
@@ -85,6 +95,7 @@ declare module 'streamify-audio' {
         cookies?: string;
         ytdlpPath?: string;
         ffmpegPath?: string;
+        providers?: ProvidersConfig;
         spotify?: {
             clientId: string;
             clientSecret: string;
@@ -162,6 +173,7 @@ declare module 'streamify-audio' {
         ytdlpPath?: string;
         ffmpegPath?: string;
         cookiesPath?: string;
+        providers?: ProvidersConfig;
         spotify?: {
             clientId: string;
             clientSecret: string;

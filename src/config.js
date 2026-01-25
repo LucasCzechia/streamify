@@ -9,6 +9,11 @@ const defaults = {
     ffmpegPath: null,
     cookies: null,
     cookiesPath: null,
+    providers: {
+        youtube: { enabled: true },
+        spotify: { enabled: true },
+        soundcloud: { enabled: true }
+    },
     spotify: {
         clientId: null,
         clientSecret: null
@@ -53,6 +58,11 @@ function load(options = {}) {
         ...defaults,
         ...fileConfig,
         ...options,
+        providers: {
+            youtube: { enabled: true, ...fileConfig.providers?.youtube, ...options.providers?.youtube },
+            spotify: { enabled: true, ...fileConfig.providers?.spotify, ...options.providers?.spotify },
+            soundcloud: { enabled: true, ...fileConfig.providers?.soundcloud, ...options.providers?.soundcloud }
+        },
         spotify: {
             ...defaults.spotify,
             ...fileConfig.spotify,

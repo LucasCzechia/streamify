@@ -15,6 +15,10 @@ class Server {
         this.setupRoutes();
     }
 
+    _isProviderEnabled(provider) {
+        return this.config.providers?.[provider]?.enabled !== false;
+    }
+
     setupRoutes() {
         this.app.use(express.json());
 
@@ -86,6 +90,9 @@ class Server {
 
         this.app.get('/youtube/search', async (req, res) => {
             try {
+                if (!this._isProviderEnabled('youtube')) {
+                    return res.status(400).json({ error: 'YouTube provider is disabled' });
+                }
                 const { q, limit = 10 } = req.query;
                 if (!q) return res.status(400).json({ error: 'Missing query parameter: q' });
 
@@ -104,6 +111,9 @@ class Server {
 
         this.app.get('/youtube/info/:videoId', async (req, res) => {
             try {
+                if (!this._isProviderEnabled('youtube')) {
+                    return res.status(400).json({ error: 'YouTube provider is disabled' });
+                }
                 const { videoId } = req.params;
 
                 const cacheKey = `yt:info:${videoId}`;
@@ -120,11 +130,17 @@ class Server {
         });
 
         this.app.get('/youtube/stream/:videoId', (req, res) => {
+            if (!this._isProviderEnabled('youtube')) {
+                return res.status(400).json({ error: 'YouTube provider is disabled' });
+            }
             youtube.stream(req.params.videoId, req.query, this.config, res);
         });
 
         this.app.get('/spotify/search', async (req, res) => {
             try {
+                if (!this._isProviderEnabled('spotify')) {
+                    return res.status(400).json({ error: 'Spotify provider is disabled' });
+                }
                 if (!this.config.spotify?.clientId) {
                     return res.status(400).json({ error: 'Spotify not configured' });
                 }
@@ -146,6 +162,9 @@ class Server {
 
         this.app.get('/spotify/info/:trackId', async (req, res) => {
             try {
+                if (!this._isProviderEnabled('spotify')) {
+                    return res.status(400).json({ error: 'Spotify provider is disabled' });
+                }
                 if (!this.config.spotify?.clientId) {
                     return res.status(400).json({ error: 'Spotify not configured' });
                 }
@@ -166,6 +185,9 @@ class Server {
 
         this.app.get('/spotify/stream/:trackId', async (req, res) => {
             try {
+                if (!this._isProviderEnabled('spotify')) {
+                    return res.status(400).json({ error: 'Spotify provider is disabled' });
+                }
                 if (!this.config.spotify?.clientId) {
                     return res.status(400).json({ error: 'Spotify not configured' });
                 }
@@ -178,6 +200,9 @@ class Server {
 
         this.app.get('/soundcloud/search', async (req, res) => {
             try {
+                if (!this._isProviderEnabled('soundcloud')) {
+                    return res.status(400).json({ error: 'SoundCloud provider is disabled' });
+                }
                 const { q, limit = 10 } = req.query;
                 if (!q) return res.status(400).json({ error: 'Missing query parameter: q' });
 
@@ -195,6 +220,9 @@ class Server {
         });
 
         this.app.get('/soundcloud/stream/:trackId', (req, res) => {
+            if (!this._isProviderEnabled('soundcloud')) {
+                return res.status(400).json({ error: 'SoundCloud provider is disabled' });
+            }
             soundcloud.stream(req.params.trackId, req.query, this.config, res);
         });
 
@@ -206,15 +234,24 @@ class Server {
                 let results;
                 switch (source) {
                     case 'spotify':
+                        if (!this._isProviderEnabled('spotify')) {
+                            return res.status(400).json({ error: 'Spotify provider is disabled' });
+                        }
                         if (!this.config.spotify?.clientId) {
                             return res.status(400).json({ error: 'Spotify not configured' });
                         }
                         results = await spotify.search(q, parseInt(limit), this.config);
                         break;
                     case 'soundcloud':
+                        if (!this._isProviderEnabled('soundcloud')) {
+                            return res.status(400).json({ error: 'SoundCloud provider is disabled' });
+                        }
                         results = await soundcloud.search(q, parseInt(limit), this.config);
                         break;
                     default:
+                        if (!this._isProviderEnabled('youtube')) {
+                            return res.status(400).json({ error: 'YouTube provider is disabled' });
+                        }
                         results = await youtube.search(q, parseInt(limit), this.config);
                 }
                 res.json(results);
@@ -228,12 +265,21 @@ class Server {
             const { source, id } = req.params;
             switch (source) {
                 case 'youtube':
+                    if (!this._isProviderEnabled('youtube')) {
+                        return res.status(400).json({ error: 'YouTube provider is disabled' });
+                    }
                     youtube.stream(id, req.query, this.config, res);
                     break;
                 case 'spotify':
+                    if (!this._isProviderEnabled('spotify')) {
+                        return res.status(400).json({ error: 'Spotify provider is disabled' });
+                    }
                     spotify.stream(id, req.query, this.config, res);
                     break;
                 case 'soundcloud':
+                    if (!this._isProviderEnabled('soundcloud')) {
+                        return res.status(400).json({ error: 'SoundCloud provider is disabled' });
+                    }
                     soundcloud.stream(id, req.query, this.config, res);
                     break;
                 default:
@@ -247,9 +293,9 @@ class Server {
             this.server = this.app.listen(this.config.port, this.config.host, () => {
                 this.startTime = Date.now();
                 log.success('STREAMIFY', `Running on http://${this.config.host}:${this.config.port}`);
-                log.info('STREAMIFY', `YouTube: enabled`);
-                log.info('STREAMIFY', `Spotify: ${this.config.spotify?.clientId ? 'enabled' : 'disabled (no credentials)'}`);
-                log.info('STREAMIFY', `SoundCloud: enabled`);
+                log.info('STREAMIFY', `YouTube: ${this._isProviderEnabled('youtube') ? 'enabled' : 'disabled'}`);
+                log.info('STREAMIFY', `Spotify: ${!this._isProviderEnabled('spotify') ? 'disabled' : (this.config.spotify?.clientId ? 'enabled' : 'disabled (no credentials)')}`);
+                log.info('STREAMIFY', `SoundCloud: ${this._isProviderEnabled('soundcloud') ? 'enabled' : 'disabled'}`);
                 log.info('STREAMIFY', `Cookies: ${this.config.cookiesPath ? 'configured' : 'not configured'}`);
                 resolve();
             });

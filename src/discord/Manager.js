@@ -16,6 +16,7 @@ class Manager extends EventEmitter {
             ytdlpPath: options.ytdlpPath,
             ffmpegPath: options.ffmpegPath,
             cookiesPath: options.cookiesPath,
+            providers: options.providers,
             spotify: options.spotify,
             audio: options.audio,
             defaultVolume: options.defaultVolume || 80,
@@ -161,6 +162,10 @@ class Manager extends EventEmitter {
         return false;
     }
 
+    _isProviderEnabled(provider) {
+        return this.config.providers?.[provider]?.enabled !== false;
+    }
+
     async search(query, options = {}) {
         const source = options.source || this._detectSource(query) || 'youtube';
         const limit = options.limit || 10;
@@ -173,11 +178,17 @@ class Manager extends EventEmitter {
             switch (source) {
                 case 'youtube':
                 case 'yt':
+                    if (!this._isProviderEnabled('youtube')) {
+                        throw new Error('YouTube provider is disabled');
+                    }
                     result = await youtube.search(query, limit, this.config);
                     break;
 
                 case 'spotify':
                 case 'sp':
+                    if (!this._isProviderEnabled('spotify')) {
+                        throw new Error('Spotify provider is disabled');
+                    }
                     if (!this.config.spotify?.clientId) {
                         throw new Error('Spotify credentials not configured');
                     }
@@ -186,10 +197,16 @@ class Manager extends EventEmitter {
 
                 case 'soundcloud':
                 case 'sc':
+                    if (!this._isProviderEnabled('soundcloud')) {
+                        throw new Error('SoundCloud provider is disabled');
+                    }
                     result = await soundcloud.search(query, limit, this.config);
                     break;
 
                 default:
+                    if (!this._isProviderEnabled('youtube')) {
+                        throw new Error('YouTube provider is disabled');
+                    }
                     result = await youtube.search(query, limit, this.config);
             }
 
@@ -213,17 +230,29 @@ class Manager extends EventEmitter {
             switch (source) {
                 case 'youtube':
                 case 'yt':
+                    if (!this._isProviderEnabled('youtube')) {
+                        throw new Error('YouTube provider is disabled');
+                    }
                     return await youtube.getInfo(id, this.config);
 
                 case 'spotify':
                 case 'sp':
+                    if (!this._isProviderEnabled('spotify')) {
+                        throw new Error('Spotify provider is disabled');
+                    }
                     return await spotify.getInfo(id, this.config);
 
                 case 'soundcloud':
                 case 'sc':
+                    if (!this._isProviderEnabled('soundcloud')) {
+                        throw new Error('SoundCloud provider is disabled');
+                    }
                     return await soundcloud.getInfo(id, this.config);
 
                 default:
+                    if (!this._isProviderEnabled('youtube')) {
+                        throw new Error('YouTube provider is disabled');
+                    }
                     return await youtube.getInfo(id, this.config);
             }
         } catch (error) {
@@ -335,10 +364,16 @@ class Manager extends EventEmitter {
 
             switch (detected) {
                 case 'youtube_playlist':
+                    if (!this._isProviderEnabled('youtube')) {
+                        throw new Error('YouTube provider is disabled');
+                    }
                     playlist = await youtube.getPlaylist(match.id, this.config);
                     break;
 
                 case 'spotify_playlist':
+                    if (!this._isProviderEnabled('spotify')) {
+                        throw new Error('Spotify provider is disabled');
+                    }
                     if (!this.config.spotify?.clientId) {
                         throw new Error('Spotify credentials not configured');
                     }
@@ -346,6 +381,9 @@ class Manager extends EventEmitter {
                     break;
 
                 case 'spotify_album':
+                    if (!this._isProviderEnabled('spotify')) {
+                        throw new Error('Spotify provider is disabled');
+                    }
                     if (!this.config.spotify?.clientId) {
                         throw new Error('Spotify credentials not configured');
                     }
