@@ -11,6 +11,13 @@ const manager = new Streamify.Manager(client, {
     // YouTube cookies (optional)
     cookiesPath: './cookies.txt',
 
+    // Providers (optional - all enabled by default)
+    providers: {
+        youtube: { enabled: true },
+        spotify: { enabled: true },
+        soundcloud: { enabled: true }
+    },
+
     // Spotify credentials (optional)
     spotify: {
         clientId: process.env.SPOTIFY_CLIENT_ID,
@@ -70,6 +77,13 @@ const streamify = new Streamify({
     cookiesPath: './cookies.txt',
     // Or direct string:
     cookies: '# Netscape HTTP Cookie File\n...',
+
+    // Providers (optional - all enabled by default)
+    providers: {
+        youtube: { enabled: true },
+        spotify: { enabled: true },
+        soundcloud: { enabled: true }
+    },
 
     // Spotify
     spotify: {
@@ -133,3 +147,23 @@ spotify: {
 ```
 
 Spotify tracks are resolved to YouTube for playback.
+
+## Providers
+
+Enable or disable individual providers:
+
+```javascript
+providers: {
+    youtube: { enabled: true },
+    spotify: { enabled: true },
+    soundcloud: { enabled: false }  // Disabled
+}
+```
+
+All providers are enabled by default. When a disabled provider is accessed, an error is thrown:
+
+```
+Error: SoundCloud provider is disabled
+```
+
+This is useful if you only want to support specific platforms.
