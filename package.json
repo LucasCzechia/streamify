@@ -1,0 +1,53 @@
+{
+  "name": "streamify-audio",
+  "version": "2.0.0",
+  "description": "Dual-mode audio library: HTTP streaming proxy + Discord player (Lavalink alternative). Supports YouTube, Spotify, SoundCloud with audio filters.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "streamify": "./bin/streamify.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js --dev"
+  },
+  "keywords": [
+    "discord",
+    "music",
+    "bot",
+    "youtube",
+    "spotify",
+    "soundcloud",
+    "audio",
+    "streaming",
+    "lavalink",
+    "lavalink-alternative",
+    "discordjs-voice",
+    "yt-dlp",
+    "ffmpeg"
+  ],
+  "author": "Lucas",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "optionalDependencies": {
+    "@discordjs/opus": "^0.9.0",
+    "@discordjs/voice": "^0.18.0"
+  },
+  "peerDependencies": {
+    "discord.js": "^14.0.0"
+  },
+  "peerDependenciesMeta": {
+    "discord.js": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
