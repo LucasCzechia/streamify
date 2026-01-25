@@ -198,6 +198,11 @@ class Manager extends EventEmitter {
     }
 
     async search(query, options = {}) {
+        const isUrl = query.startsWith('http://') || query.startsWith('https://');
+        if (isUrl) {
+            return this.resolve(query);
+        }
+
         const source = options.source || this._detectSource(query) || 'youtube';
         const limit = options.limit || 10;
 
@@ -313,6 +318,10 @@ class Manager extends EventEmitter {
             }
         }
 
+        const isUrl = query.startsWith('http://') || query.startsWith('https://');
+        if (isUrl) {
+            return { loadType: 'empty', tracks: [] };
+        }
         return this.search(query);
     }
 
@@ -332,7 +341,8 @@ class Manager extends EventEmitter {
             youtube: [
                 /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
                 /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-                /(?:music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/
+                /(?:music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
+                /(?:youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/
             ],
             spotify: [
                 /open\.spotify\.com\/track\/([a-zA-Z0-9]+)/,
@@ -357,7 +367,7 @@ class Manager extends EventEmitter {
 
     _extractId(input, source) {
         const patterns = {
-            youtube: /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
+            youtube: /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|music\.youtube\.com\/watch\?v=|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
             youtube_playlist: /youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/,
             spotify: /(?:open\.spotify\.com\/track\/|spotify:track:)([a-zA-Z0-9]+)/,
             spotify_playlist: /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/,

@@ -51,7 +51,7 @@ class StreamController {
 
         let formatString;
         if (isLive) {
-            formatString = 'bestaudio[ext=webm]/bestaudio/best';
+            formatString = 'bestaudio*/best';
         } else {
             formatString = isYouTube ? '18/22/bestaudio[ext=webm]/bestaudio/best' : 'bestaudio/best';
         }
@@ -68,11 +68,9 @@ class StreamController {
         ];
 
         if (isLive) {
-            ytdlpArgs.push('--live-from-start');
+            ytdlpArgs.push('--no-live-from-start');
             log.info('STREAM', `Live stream detected, using live-compatible format`);
-        }
-
-        if (isYouTube) {
+        } else if (isYouTube) {
             ytdlpArgs.push('--extractor-args', 'youtube:player_client=web_creator');
         }
 
