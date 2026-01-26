@@ -34,8 +34,25 @@ class StreamController {
         }
 
         this.startTime = Date.now();
-        const videoId = this.track._resolvedId || this.track.id;
         const source = this.track.source || 'youtube';
+
+        let videoId = this.track._resolvedId || this.track.id;
+
+        if (source === 'spotify' && !this.track._resolvedId) {
+            log.info('STREAM', `Resolving Spotify track to YouTube: ${this.track.title}`);
+            try {
+                const spotify = require('../providers/spotify');
+                videoId = await spotify.resolveToYouTube(this.track.id, this.config);
+                this.track._resolvedId = videoId;
+            } catch (error) {
+                log.error('STREAM', `Spotify resolution failed: ${error.message}`);
+                throw new Error(`Failed to resolve Spotify track: ${error.message}`);
+            }
+        }
+
+        if (!videoId || videoId === 'undefined') {
+            throw new Error(`Invalid track ID: ${videoId} (source: ${source}, title: ${this.track.title})`);
+        }
 
         log.info('STREAM', `Creating stream for ${videoId} (${source})`);
 
