@@ -338,7 +338,7 @@ class Player extends EventEmitter {
             this._positionTimestamp = Date.now();
 
             this._prefetchNext();
-            this._updateVoiceChannelStatus(track);
+            setImmediate(() => this._updateVoiceChannelStatus(track));
 
             return track;
         } catch (error) {
@@ -365,6 +365,83 @@ class Player extends EventEmitter {
             this._prefetchedStream = null;
         }
         this._prefetchedTrack = null;
+    }
+
+    async _prefetchNext() {
+        if (this._prefetching || this.queue.tracks.length === 0) return;
+
+        const nextTrack = this.queue.tracks[0];
+        if (!nextTrack || this._prefetchedTrack?.id === nextTrack.id) return;
+
+        this._prefetching = true;
+        this._clearPrefetch();
+
+        log.debug('PLAYER', `Prefetching: ${nextTrack.title} (${nextTrack.id})`);
+
+        try {
+            const filtersWithVolume = {
+                ...this._filters,
+                volume: this._volume
+            };
+
+            this._prefetchedTrack = nextTrack;
+            this._prefetchedStream = createStream(nextTrack, filtersWithVolume, this.config);
+            await this._prefetchedStream.create();
+
+            log.debug('PLAYER', `Prefetch ready: ${nextTrack.id}`);
+        } catch (error) {
+            log.debug('PLAYER', `Prefetch failed: ${error.message}`);
+            this._clearPrefetch();
+        } finally {
+            this._prefetching = false;
+        }
+    }
+
+    async _updateVoiceChannelStatus(track) {
+        if (!this.voiceChannelStatus.enabled || !track) return;
+
+        const now = Date.now();
+        if (now - this._lastStatusUpdate < 300000) return;
+
+        const guild = this.manager.client.guilds.cache.get(this.guildId);
+        const channel = guild?.channels.cache.get(this.voiceChannelId);
+        if (!channel) return;
+
+        const botMember = guild.members.me || guild.members.cache.get(this.manager.client.user.id);
+        if (!channel.permissionsFor(botMember)?.has('ManageChannels')) return;
+
+        try {
+            const requesterName = typeof track.requestedBy === 'string' ? track.requestedBy : (track.requestedBy?.username || 'Unknown');
+            let statusText = this.voiceChannelStatus.template
+                .replace('{title}', track.title || 'Unknown')
+                .replace('{artist}', track.author || 'Unknown')
+                .replace('{requester}', requesterName);
+
+            // Strip emojis/specials
+            statusText = statusText
+                .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/gu, '')
+                .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '')
+                .trim()
+                .substring(0, 500);
+
+            await this.manager.client.rest.put(`/channels/${this.voiceChannelId}/voice-status`, {
+                body: { status: statusText }
+            });
+            
+            this._lastStatusUpdate = now;
+            log.debug('PLAYER', `Updated voice channel status: ${statusText}`);
+        } catch (error) {
+            log.debug('PLAYER', `Failed to update voice channel status: ${error.message}`);
+        }
+    }
+
+    async _clearVoiceChannelStatus() {
+        if (!this.voiceChannelStatus.enabled) return;
+        try {
+            await this.manager.client.rest.put(`/channels/${this.voiceChannelId}/voice-status`, {
+                body: { status: "" }
+            });
+        } catch (e) {}
     }
 
     _sanitizeStatus(text) {
