@@ -430,7 +430,26 @@ class Player extends EventEmitter {
             this._lastStatusUpdate = now;
             log.debug('PLAYER', `Updated voice channel topic: ${topic}`);
         } catch (error) {
-            log.error('PLAYER', `Failed to update voice channel topic: ${error.message}`);
+            // Check for Discord's content filter error
+            if (error.message.includes('word that is not allowed') || error.code === 50035) {
+                log.warn('PLAYER', 'Voice channel topic blocked by Discord filter. Attempting fallback...');
+                try {
+                    // Fallback 1: Just the title
+                    const fallbackTopic = `🎶 Playing: ${track.title}`.substring(0, 1024);
+                    await channel.edit({ topic: fallbackTopic });
+                    this._lastStatusUpdate = now;
+                } catch (err2) {
+                    // Fallback 2: Generic status
+                    try {
+                        await channel.edit({ topic: '🎶 Playing Music' });
+                        this._lastStatusUpdate = now;
+                    } catch (err3) {
+                        log.error('PLAYER', `All voice channel status fallbacks failed: ${err3.message}`);
+                    }
+                }
+            } else {
+                log.error('PLAYER', `Failed to update voice channel topic: ${error.message}`);
+            }
         }
     }
 
