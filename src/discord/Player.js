@@ -67,7 +67,7 @@ class Player extends EventEmitter {
 
         this.voiceChannelStatus = {
             enabled: options.voiceChannelStatus?.enabled ?? false,
-            template: options.voiceChannelStatus?.template ?? '🎶 Now Playing: {title} - {artist} | Requested by: {requester}'
+            template: options.voiceChannelStatus?.template ?? 'Now Playing: {title} - {artist} | Requested by: {requester}'
         };
 
         this._emptyTimeout = null;
@@ -359,36 +359,6 @@ class Player extends EventEmitter {
         }
     }
 
-    async _prefetchNext() {
-        if (this._prefetching || this.queue.tracks.length === 0) return;
-
-        const nextTrack = this.queue.tracks[0];
-        if (!nextTrack || this._prefetchedTrack?.id === nextTrack.id) return;
-
-        this._prefetching = true;
-        this._clearPrefetch();
-
-        log.debug('PLAYER', `Prefetching: ${nextTrack.title} (${nextTrack.id})`);
-
-        try {
-            const filtersWithVolume = {
-                ...this._filters,
-                volume: this._volume
-            };
-
-            this._prefetchedTrack = nextTrack;
-            this._prefetchedStream = createStream(nextTrack, filtersWithVolume, this.config);
-            await this._prefetchedStream.create();
-
-            log.debug('PLAYER', `Prefetch ready: ${nextTrack.id}`);
-        } catch (error) {
-            log.debug('PLAYER', `Prefetch failed: ${error.message}`);
-            this._clearPrefetch();
-        } finally {
-            this._prefetching = false;
-        }
-    }
-
     _clearPrefetch() {
         if (this._prefetchedStream) {
             this._prefetchedStream.destroy();
@@ -397,11 +367,19 @@ class Player extends EventEmitter {
         this._prefetchedTrack = null;
     }
 
+    _sanitizeStatus(text) {
+        if (!text) return '';
+        // Strip emojis and keep only common printable characters
+        return text
+            .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/gu, '')
+            .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '') // Keep basic ASCII and extended Latin
+            .trim()
+            .substring(0, 500);
+    }
+
     async _updateVoiceChannelStatus(track) {
         if (!this.voiceChannelStatus.enabled || !track) return;
 
-        // Discord rate limit for channel edits is strict (approx 2 per 10 mins)
-        // We limit to once every 5 minutes to be safe.
         const now = Date.now();
         if (now - this._lastStatusUpdate < 300000) {
             log.debug('PLAYER', 'Skipping voice channel status update due to rate limit');
@@ -412,43 +390,55 @@ class Player extends EventEmitter {
         const channel = guild?.channels.cache.get(this.voiceChannelId);
         if (!channel) return;
 
-        // Check for permissions
         const botMember = guild.members.me || guild.members.cache.get(this.manager.client.user.id);
         if (!channel.permissionsFor(botMember)?.has('ManageChannels')) {
-            log.warn('PLAYER', `Missing 'ManageChannels' permission to update topic in ${channel.name}`);
+            log.warn('PLAYER', `Missing 'ManageChannels' permission to update status in ${channel.name}`);
             return;
         }
 
         try {
             const requesterName = typeof track.requestedBy === 'string' ? track.requestedBy : (track.requestedBy?.username || 'Unknown');
-            const topic = this.voiceChannelStatus.template
+            let statusText = this.voiceChannelStatus.template
                 .replace('{title}', track.title || 'Unknown')
                 .replace('{artist}', track.author || 'Unknown')
                 .replace('{requester}', requesterName);
 
-            await channel.edit({ topic });
+            statusText = this._sanitizeStatus(statusText);
+
+            // Use the newer setStatus method if available, else fallback to topic
+            if (typeof channel.setStatus === 'function') {
+                await channel.setStatus(statusText);
+            } else {
+                await channel.edit({ topic: statusText });
+            }
+            
             this._lastStatusUpdate = now;
-            log.debug('PLAYER', `Updated voice channel topic: ${topic}`);
+            log.debug('PLAYER', `Updated voice channel status: ${statusText}`);
         } catch (error) {
-            // Check for Discord's content filter error
             if (error.message.includes('word that is not allowed') || error.code === 50035) {
-                log.warn('PLAYER', 'Voice channel topic blocked by Discord filter. Attempting fallback...');
+                log.warn('PLAYER', 'Voice channel status blocked by Discord filter. Attempting plain text fallback...');
                 try {
-                    // Fallback 1: Just the title
-                    const fallbackTopic = `🎶 Playing: ${track.title}`.substring(0, 1024);
-                    await channel.edit({ topic: fallbackTopic });
+                    const fallback = this._sanitizeStatus(`Playing: ${track.title}`);
+                    if (typeof channel.setStatus === 'function') {
+                        await channel.setStatus(fallback);
+                    } else {
+                        await channel.edit({ topic: fallback });
+                    }
                     this._lastStatusUpdate = now;
                 } catch (err2) {
-                    // Fallback 2: Generic status
                     try {
-                        await channel.edit({ topic: '🎶 Playing Music' });
+                        if (typeof channel.setStatus === 'function') {
+                            await channel.setStatus('Playing Music');
+                        } else {
+                            await channel.edit({ topic: 'Playing Music' });
+                        }
                         this._lastStatusUpdate = now;
                     } catch (err3) {
                         log.error('PLAYER', `All voice channel status fallbacks failed: ${err3.message}`);
                     }
                 }
             } else {
-                log.error('PLAYER', `Failed to update voice channel topic: ${error.message}`);
+                log.error('PLAYER', `Failed to update voice channel status: ${error.message}`);
             }
         }
     }
@@ -461,10 +451,14 @@ class Player extends EventEmitter {
         if (!channel) return;
 
         try {
-            await channel.edit({ topic: '' });
-            log.debug('PLAYER', 'Cleared voice channel topic');
+            if (typeof channel.setStatus === 'function') {
+                await channel.setStatus('');
+            } else {
+                await channel.edit({ topic: '' });
+            }
+            log.debug('PLAYER', 'Cleared voice channel status');
         } catch (error) {
-            log.error('PLAYER', `Failed to clear voice channel topic: ${error.message}`);
+            log.error('PLAYER', `Failed to clear voice channel status: ${error.message}`);
         }
     }
 
