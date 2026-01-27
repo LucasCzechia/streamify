@@ -18,6 +18,10 @@ const defaults = {
         clientId: null,
         clientSecret: null
     },
+    voiceChannelStatus: {
+        enabled: false,
+        template: '🎶 Now Playing: {title} - {artist} | Requested by: {requester}'
+    },
     audio: {
         bitrate: '128k',
         format: 'opus'

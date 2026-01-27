@@ -65,10 +65,16 @@ class Player extends EventEmitter {
             maxTracks: options.autoplay?.maxTracks ?? 5
         };
 
+        this.voiceChannelStatus = {
+            enabled: options.voiceChannelStatus?.enabled ?? false,
+            template: options.voiceChannelStatus?.template ?? '🎶 Now Playing: {title} - {artist} | Requested by: {requester}'
+        };
+
         this._emptyTimeout = null;
         this._inactivityTimeout = null;
         this._lastActivity = Date.now();
         this._autoPaused = false;
+        this._lastStatusUpdate = 0;
     }
 
     setAutoPause(enabled) {
@@ -332,6 +338,7 @@ class Player extends EventEmitter {
             this._positionTimestamp = Date.now();
 
             this._prefetchNext();
+            this._updateVoiceChannelStatus(track);
 
             return track;
         } catch (error) {
@@ -388,6 +395,58 @@ class Player extends EventEmitter {
             this._prefetchedStream = null;
         }
         this._prefetchedTrack = null;
+    }
+
+    async _updateVoiceChannelStatus(track) {
+        if (!this.voiceChannelStatus.enabled || !track) return;
+
+        // Discord rate limit for channel edits is strict (approx 2 per 10 mins)
+        // We limit to once every 5 minutes to be safe.
+        const now = Date.now();
+        if (now - this._lastStatusUpdate < 300000) {
+            log.debug('PLAYER', 'Skipping voice channel status update due to rate limit');
+            return;
+        }
+
+        const guild = this.manager.client.guilds.cache.get(this.guildId);
+        const channel = guild?.channels.cache.get(this.voiceChannelId);
+        if (!channel) return;
+
+        // Check for permissions
+        const botMember = guild.members.me || guild.members.cache.get(this.manager.client.user.id);
+        if (!channel.permissionsFor(botMember)?.has('ManageChannels')) {
+            log.warn('PLAYER', `Missing 'ManageChannels' permission to update topic in ${channel.name}`);
+            return;
+        }
+
+        try {
+            const requesterName = typeof track.requestedBy === 'string' ? track.requestedBy : (track.requestedBy?.username || 'Unknown');
+            const topic = this.voiceChannelStatus.template
+                .replace('{title}', track.title || 'Unknown')
+                .replace('{artist}', track.author || 'Unknown')
+                .replace('{requester}', requesterName);
+
+            await channel.edit({ topic });
+            this._lastStatusUpdate = now;
+            log.debug('PLAYER', `Updated voice channel topic: ${topic}`);
+        } catch (error) {
+            log.error('PLAYER', `Failed to update voice channel topic: ${error.message}`);
+        }
+    }
+
+    async _clearVoiceChannelStatus() {
+        if (!this.voiceChannelStatus.enabled) return;
+
+        const guild = this.manager.client.guilds.cache.get(this.guildId);
+        const channel = guild?.channels.cache.get(this.voiceChannelId);
+        if (!channel) return;
+
+        try {
+            await channel.edit({ topic: '' });
+            log.debug('PLAYER', 'Cleared voice channel topic');
+        } catch (error) {
+            log.error('PLAYER', `Failed to clear voice channel topic: ${error.message}`);
+        }
     }
 
     async _handleAutoplay(lastTrack) {
@@ -551,6 +610,7 @@ class Player extends EventEmitter {
         this.queue.setCurrent(null);
         
         log.info('PLAYER', 'Stopped playback and cleared queue');
+        this._clearVoiceChannelStatus();
         
         return true;
     }
@@ -779,6 +839,7 @@ class Player extends EventEmitter {
         this.queue.clear();
         this.queue.setCurrent(null);
 
+        this._clearVoiceChannelStatus();
         this.emit('destroy');
         this.removeAllListeners();
     }

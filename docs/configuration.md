@@ -57,9 +57,20 @@ const manager = new Streamify.Manager(client, {
     autoplay: {
         enabled: false,
         maxTracks: 5              // Related tracks to fetch
+    },
+
+    // Voice Channel Status
+    voiceChannelStatus: {
+        enabled: true,            // Show "Now Playing" in VC description
+        template: '🎶 Now Playing: {title} - {artist}' // Custom template
     }
 });
 ```
+
+**Voice Channel Status Template Variables:**
+- `{title}` - Track title
+- `{artist}` - Track artist/author
+- `{requester}` - Username of the requester (if provided)
 
 ## HTTP Server Mode
 

@@ -73,6 +73,11 @@ class Manager extends EventEmitter {
             maxTracks: options.autoplay?.maxTracks ?? 5
         };
 
+        this.voiceChannelStatus = {
+            enabled: options.voiceChannelStatus?.enabled ?? false,
+            template: options.voiceChannelStatus?.template ?? '🎶 Now Playing: {title} - {artist} | Requested by: {requester}'
+        };
+
         this._setupVoiceStateListener();
 
         log.info('MANAGER', 'Streamify Manager initialized');
@@ -165,7 +170,8 @@ class Manager extends EventEmitter {
             maxPreviousTracks: this.maxPreviousTracks,
             autoLeave: this.autoLeave,
             autoPause: this.autoPause,
-            autoplay: this.autoplay
+            autoplay: this.autoplay,
+            voiceChannelStatus: this.voiceChannelStatus
         });
 
         player.on('destroy', () => {
