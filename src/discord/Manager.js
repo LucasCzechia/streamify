@@ -96,6 +96,10 @@ class Manager extends EventEmitter {
             }
 
             if (oldState.id === botId && newState.channelId && oldState.channelId !== newState.channelId) {
+                // Clear status of the old channel
+                if (oldState.channelId) {
+                    this.clearVoiceStatus(oldState.channelId);
+                }
                 player.voiceChannelId = newState.channelId;
                 player.emit('channelMove', newState.channelId);
                 return;
@@ -108,12 +112,16 @@ class Manager extends EventEmitter {
                 const members = channel.members.filter(m => !m.user.bot);
                 const memberCount = members.size;
 
-                if (oldState.channelId === player.voiceChannelId && newState.channelId !== player.voiceChannelId) {
-                    player.emit('userLeave', oldState.member, memberCount);
-                }
+                // Ignore bots for join/leave events
+                const transitionedMember = newState.member || oldState.member;
+                if (transitionedMember && !transitionedMember.user.bot) {
+                    if (oldState.channelId === player.voiceChannelId && newState.channelId !== player.voiceChannelId) {
+                        player.emit('userLeave', transitionedMember, memberCount);
+                    }
 
-                if (newState.channelId === player.voiceChannelId && oldState.channelId !== player.voiceChannelId) {
-                    player.emit('userJoin', newState.member, memberCount);
+                    if (newState.channelId === player.voiceChannelId && oldState.channelId !== player.voiceChannelId) {
+                        player.emit('userJoin', transitionedMember, memberCount);
+                    }
                 }
 
                 if (memberCount < player.autoPause.minUsers) {
@@ -188,6 +196,20 @@ class Manager extends EventEmitter {
 
     get(guildId) {
         return this.players.get(guildId);
+    }
+
+    async clearVoiceStatus(channelId) {
+        if (!channelId) return false;
+        try {
+            await this.client.rest.put(`/channels/${channelId}/voice-status`, {
+                body: { status: "" }
+            });
+            log.debug('MANAGER', `Cleared voice status for channel ${channelId}`);
+            return true;
+        } catch (error) {
+            log.debug('MANAGER', `Failed to clear voice status for ${channelId}: ${error.message}`);
+            return false;
+        }
     }
 
     destroy(guildId) {

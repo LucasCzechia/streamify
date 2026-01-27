@@ -67,7 +67,7 @@ class Player extends EventEmitter {
 
         this.voiceChannelStatus = {
             enabled: options.voiceChannelStatus?.enabled ?? false,
-            template: options.voiceChannelStatus?.template ?? 'Now Playing: {title} - {artist} | Requested by: {requester}'
+            template: options.voiceChannelStatus?.template ?? '🎶 Now Playing: {title} - {artist} | Requested by: {requester}'
         };
 
         this._emptyTimeout = null;
@@ -212,6 +212,7 @@ class Player extends EventEmitter {
                     if (this.autoplay.enabled && track) {
                         await this._handleAutoplay(track);
                     } else {
+                        this._clearVoiceChannelStatus();
                         this.emit('queueEnd');
                         this._resetInactivityTimeout();
                     }
@@ -247,6 +248,7 @@ class Player extends EventEmitter {
                 // Use setImmediate to break recursion stack on consecutive failures
                 setImmediate(() => this._playTrack(next));
             } else {
+                this._clearVoiceChannelStatus();
                 this.emit('queueEnd');
             }
         });
@@ -401,63 +403,6 @@ class Player extends EventEmitter {
         if (!this.voiceChannelStatus.enabled || !track) return;
 
         const now = Date.now();
-        if (now - this._lastStatusUpdate < 300000) return;
-
-        const guild = this.manager.client.guilds.cache.get(this.guildId);
-        const channel = guild?.channels.cache.get(this.voiceChannelId);
-        if (!channel) return;
-
-        const botMember = guild.members.me || guild.members.cache.get(this.manager.client.user.id);
-        if (!channel.permissionsFor(botMember)?.has('ManageChannels')) return;
-
-        try {
-            const requesterName = typeof track.requestedBy === 'string' ? track.requestedBy : (track.requestedBy?.username || 'Unknown');
-            let statusText = this.voiceChannelStatus.template
-                .replace('{title}', track.title || 'Unknown')
-                .replace('{artist}', track.author || 'Unknown')
-                .replace('{requester}', requesterName);
-
-            // Strip emojis/specials
-            statusText = statusText
-                .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/gu, '')
-                .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '')
-                .trim()
-                .substring(0, 500);
-
-            await this.manager.client.rest.put(`/channels/${this.voiceChannelId}/voice-status`, {
-                body: { status: statusText }
-            });
-            
-            this._lastStatusUpdate = now;
-            log.debug('PLAYER', `Updated voice channel status: ${statusText}`);
-        } catch (error) {
-            log.debug('PLAYER', `Failed to update voice channel status: ${error.message}`);
-        }
-    }
-
-    async _clearVoiceChannelStatus() {
-        if (!this.voiceChannelStatus.enabled) return;
-        try {
-            await this.manager.client.rest.put(`/channels/${this.voiceChannelId}/voice-status`, {
-                body: { status: "" }
-            });
-        } catch (e) {}
-    }
-
-    _sanitizeStatus(text) {
-        if (!text) return '';
-        // Strip emojis and keep only common printable characters
-        return text
-            .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/gu, '')
-            .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '') // Keep basic ASCII and extended Latin
-            .trim()
-            .substring(0, 500);
-    }
-
-    async _updateVoiceChannelStatus(track) {
-        if (!this.voiceChannelStatus.enabled || !track) return;
-
-        const now = Date.now();
         if (now - this._lastStatusUpdate < 300000) {
             log.debug('PLAYER', 'Skipping voice channel status update due to rate limit');
             return;
@@ -475,65 +420,33 @@ class Player extends EventEmitter {
 
         try {
             const requesterName = typeof track.requestedBy === 'string' ? track.requestedBy : (track.requestedBy?.username || 'Unknown');
-            let statusText = this.voiceChannelStatus.template
+            const statusText = this.voiceChannelStatus.template
                 .replace('{title}', track.title || 'Unknown')
                 .replace('{artist}', track.author || 'Unknown')
-                .replace('{requester}', requesterName);
+                .replace('{requester}', requesterName)
+                .substring(0, 500);
 
-            statusText = this._sanitizeStatus(statusText);
+            log.info('PLAYER', `Updating voice status: ${statusText}`);
 
-            // Use the newer setStatus method if available, else fallback to topic
-            if (typeof channel.setStatus === 'function') {
-                await channel.setStatus(statusText);
-            } else {
-                await channel.edit({ topic: statusText });
-            }
+            await this.manager.client.rest.put(`/channels/${this.voiceChannelId}/voice-status`, {
+                body: { status: statusText }
+            });
             
             this._lastStatusUpdate = now;
-            log.debug('PLAYER', `Updated voice channel status: ${statusText}`);
+            log.info('PLAYER', `Voice channel status updated successfully`);
         } catch (error) {
-            if (error.message.includes('word that is not allowed') || error.code === 50035) {
-                log.warn('PLAYER', 'Voice channel status blocked by Discord filter. Attempting plain text fallback...');
-                try {
-                    const fallback = this._sanitizeStatus(`Playing: ${track.title}`);
-                    if (typeof channel.setStatus === 'function') {
-                        await channel.setStatus(fallback);
-                    } else {
-                        await channel.edit({ topic: fallback });
-                    }
-                    this._lastStatusUpdate = now;
-                } catch (err2) {
-                    try {
-                        if (typeof channel.setStatus === 'function') {
-                            await channel.setStatus('Playing Music');
-                        } else {
-                            await channel.edit({ topic: 'Playing Music' });
-                        }
-                        this._lastStatusUpdate = now;
-                    } catch (err3) {
-                        log.error('PLAYER', `All voice channel status fallbacks failed: ${err3.message}`);
-                    }
-                }
-            } else {
-                log.error('PLAYER', `Failed to update voice channel status: ${error.message}`);
-            }
+            log.error('PLAYER', `Failed to update voice channel status: ${error.message}`);
         }
     }
 
     async _clearVoiceChannelStatus() {
         if (!this.voiceChannelStatus.enabled) return;
 
-        const guild = this.manager.client.guilds.cache.get(this.guildId);
-        const channel = guild?.channels.cache.get(this.voiceChannelId);
-        if (!channel) return;
-
         try {
-            if (typeof channel.setStatus === 'function') {
-                await channel.setStatus('');
-            } else {
-                await channel.edit({ topic: '' });
-            }
-            log.debug('PLAYER', 'Cleared voice channel status');
+            await this.manager.client.rest.put(`/channels/${this.voiceChannelId}/voice-status`, {
+                body: { status: "" }
+            });
+            log.info('PLAYER', 'Cleared voice channel status');
         } catch (error) {
             log.error('PLAYER', `Failed to clear voice channel status: ${error.message}`);
         }
@@ -589,6 +502,7 @@ class Player extends EventEmitter {
 
         this.audioPlayer.stop(true);
         log.info('PLAYER', `Paused playback at ${Math.floor(this._positionMs / 1000)}s (Reason: User Request)`);
+        this._clearVoiceChannelStatus();
 
         return true;
     }
@@ -615,6 +529,7 @@ class Player extends EventEmitter {
                 this._positionTimestamp = Date.now();
 
                 this._prefetchNext();
+                this._updateVoiceChannelStatus(track);
             } catch (error) {
                 log.error('PLAYER', `Resume failed: ${error.message}`);
                 this._paused = false;
@@ -628,6 +543,7 @@ class Player extends EventEmitter {
             this.audioPlayer.unpause();
             this._paused = false;
             this._positionTimestamp = Date.now();
+            this._updateVoiceChannelStatus(this.queue.current);
         }
 
         return true;

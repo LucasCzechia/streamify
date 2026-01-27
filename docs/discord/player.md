@@ -163,6 +163,10 @@ const presets = player.getEffectPresets();
 - `vaporwave` - Slow down with lower pitch
 - `8d` - 8D rotating audio effect
 - `karaoke` - Reduce vocals
+- `reverb` - Add room acoustics / echo
+- `surround` - Virtual surround sound mapping
+- `boost` - General volume and clarity boost
+- `subboost` - Extreme sub-woofer boost
 - `trebleboost` - Boost treble frequencies
 - `deep` - Deep bass with lower pitch
 - `lofi` - Lo-fi aesthetic

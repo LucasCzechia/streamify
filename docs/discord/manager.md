@@ -70,15 +70,22 @@ process.on('SIGINT', () => {
 
 Searches for tracks.
 
-```javascript
-// Basic search (YouTube)
-const result = await manager.search('never gonna give you up');
+- `query` (string) - The search term or URL
+- `options` (object) - Search configuration
+    - `source` (string) - `youtube`, `spotify`, or `soundcloud`
+    - `limit` (number) - Number of results (default: 10)
+    - `type` (string) - `video`, `live`, or `all` (YouTube only)
+    - `sort` (string) - `relevance`, `popularity`, `date`, or `rating` (YouTube only)
 
-// With options
-const result = await manager.search('never gonna give you up', {
-    source: 'spotify',  // youtube, spotify, soundcloud
-    limit: 10
+**Example:**
+
+```javascript
+const result = await manager.search('lofi hip hop', {
+    source: 'youtube',
+    type: 'live',
+    sort: 'popularity'
 });
+```
 
 // Result
 {

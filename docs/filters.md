@@ -287,6 +287,44 @@ await player.setFilter('peaking', {
 });
 ```
 
+## Effect Presets (Stacked)
+
+Streamify supports "Effect Presets" which can be stacked on top of each other. These are more powerful than standard filters because they can combine multiple FFmpeg settings.
+
+### Available Effect Presets
+
+| Preset | Description |
+|--------|-------------|
+| `bassboost` | Strong low-end boost |
+| `subboost` | Extreme sub-woofer boost |
+| `nightcore` | High speed and pitch |
+| `vaporwave` | Low speed and pitch |
+| `reverb` | Adds room acoustics / echo |
+| `surround` | Virtual surround sound mapping |
+| `boost` | General volume and clarity boost |
+| `karaoke` | Vocal reduction |
+| `8d` | Fast circular panning |
+
+### Usage
+
+```javascript
+// Set a single effect with intensity (0.0 to 2.0)
+await player.setEffectPresets({ name: 'reverb', intensity: 0.8 });
+
+// Stack multiple effects
+await player.setEffectPresets([
+    { name: 'bassboost', intensity: 1.2 },
+    { name: 'nightcore', intensity: 1.0 }
+]);
+
+// Clear all effects
+await player.clearEffectPresets();
+
+// Get active effects
+const active = player.getActiveEffectPresets();
+// [{ name: 'reverb', intensity: 0.8 }]
+```
+
 ## Additional Effects
 
 | Effect | Description |

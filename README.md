@@ -171,22 +171,47 @@ audio.play();
 | Feature | Discord | HTTP |
 |---------|:-------:|:----:|
 | 🎵 YouTube, Spotify, SoundCloud | ✅ | ✅ |
+| 📺 **Voice Channel Status** | ✅ | — |
+| 🔍 **Advanced Search Filters** | ✅ | ✅ |
 | 📋 Playlists & Albums | ✅ | ✅ |
-| 🎚️ 25+ Audio Filters | ✅ | ✅ |
+| 🎚️ 30+ Stackable Filters | ✅ | ✅ |
 | 🎛️ 15-Band Equalizer | ✅ | ✅ |
 | 🎨 15 EQ Presets | ✅ | ✅ |
 | ⏭️ Instant Skip (prefetch) | ✅ | — |
 | ⏸️ Auto-pause when alone | ✅ | — |
 | ▶️ Auto-resume on rejoin | ✅ | — |
 | 🚪 Auto-leave on inactivity | ✅ | — |
-| 📻 Autoplay related tracks | ✅ | — |
 | 🚫 Sponsorblock | ✅ | ✅ |
-| 📊 Stream position tracking | ✅ | ✅ |
+| 📊 Timing & Performance Logs | ✅ | ✅ |
 | 🔌 No Lavalink/Java needed | ✅ | ✅ |
 
 ---
 
 ## 🎮 Discord Player Features
+
+### Voice Channel Status
+
+Show what's playing directly in the sidebar of the voice channel.
+
+```javascript
+const manager = new Streamify.Manager(client, {
+    voiceChannelStatus: {
+        enabled: true,
+        template: '🎶 Playing: {title} | {requester}'
+    }
+});
+```
+
+### Search with Filters
+
+Filter for live streams or sort results by popularity/date.
+
+```javascript
+const results = await manager.search('lofi hip hop', {
+    type: 'live',
+    sort: 'popularity'
+});
+```
 
 ### Queue Management
 
@@ -297,6 +322,10 @@ const url = streamify.getStreamUrl('youtube', 'dQw4w9WgXcQ', {
 | `volume` | 0 to 200 | Volume % |
 | `nightcore` | boolean | Speed + pitch up |
 | `vaporwave` | boolean | Speed + pitch down |
+| `subboost` | boolean | Extreme sub-bass boost |
+| `reverb` | boolean | Room acoustics effect |
+| `surround` | boolean | Surround sound mapping |
+| `boost` | boolean | Clarity & volume boost |
 | `8d` | boolean | Rotating audio |
 | `karaoke` | boolean | Reduce vocals |
 | `bassboost` | boolean | Heavy bass |
