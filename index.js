@@ -249,4 +249,8 @@ Streamify.Manager = Manager;
 Streamify.Player = Manager ? require('./src/discord/Player') : null;
 Streamify.Queue = Manager ? require('./src/discord/Queue') : null;
 
+const { getEffectPresetsInfo, EFFECT_PRESETS } = require('./src/filters/ffmpeg');
+Streamify.getEffectPresetsInfo = getEffectPresetsInfo;
+Streamify.EFFECT_PRESETS = EFFECT_PRESETS;
+
 module.exports = Streamify;

@@ -22,6 +22,17 @@ class StreamController {
         this.destroyed = false;
         this.startTime = null;
         this.bytesReceived = 0;
+        this.bytesSent = 0;
+        this.ytdlpError = '';
+        this.ffmpegError = '';
+        
+        // Timing metrics
+        this.metrics = {
+            metadata: 0,
+            spawn: 0,
+            firstByte: 0,
+            total: 0
+        };
     }
 
     async create(seekPosition = 0) {
@@ -34,6 +45,7 @@ class StreamController {
         }
 
         this.startTime = Date.now();
+        const startTimestamp = this.startTime;
         const source = this.track.source || 'youtube';
 
         let videoId = this.track._resolvedId || this.track.id;
@@ -44,10 +56,13 @@ class StreamController {
                 const spotify = require('../providers/spotify');
                 videoId = await spotify.resolveToYouTube(this.track.id, this.config);
                 this.track._resolvedId = videoId;
+                this.metrics.metadata = Date.now() - startTimestamp;
             } catch (error) {
                 log.error('STREAM', `Spotify resolution failed: ${error.message}`);
                 throw new Error(`Failed to resolve Spotify track: ${error.message}`);
             }
+        } else {
+            this.metrics.metadata = Date.now() - startTimestamp;
         }
 
         if (!videoId || videoId === 'undefined') {
@@ -55,6 +70,17 @@ class StreamController {
         }
 
         log.info('STREAM', `Creating stream for ${videoId} (${source})`);
+        
+        // Log Filter Chain
+        const filterNames = Object.keys(this.filters).filter(k => k !== 'start' && k !== '_trigger');
+        if (filterNames.length > 0) {
+            const chain = filterNames.map(name => {
+                const val = this.filters[name];
+                const displayVal = typeof val === 'object' ? JSON.stringify(val) : val;
+                return `[${name} (${displayVal})]`;
+            }).join(' -> ');
+            log.debug('STREAM', `Filter Chain: ${chain}`);
+        }
 
         let url;
         if (source === 'soundcloud') {
@@ -106,35 +132,45 @@ class StreamController {
             ytdlpArgs.push('--sponsorblock-remove', categories.join(','));
         }
 
-        this.ytdlp = spawn(this.config.ytdlpPath, ytdlpArgs, {
-            env: { ...process.env, PATH: '/usr/local/bin:/root/.deno/bin:' + process.env.PATH }
-        });
+        const env = { ...process.env, PATH: '/usr/local/bin:/root/.deno/bin:' + process.env.PATH };
 
-        this._spawnTime = Date.now() - this.startTime;
+        const spawnStart = Date.now();
+        this.ytdlp = spawn(this.config.ytdlpPath, ytdlpArgs, { env });
 
         const ffmpegFilters = { ...this.filters };
-        if (seekPosition > 0) {
-            ffmpegFilters.start = seekPosition / 1000;
-        }
-
         const ffmpegArgs = buildFfmpegArgs(ffmpegFilters, this.config);
-        this.ffmpeg = spawn(this.config.ffmpegPath, ffmpegArgs);
+        this.ffmpeg = spawn(this.config.ffmpegPath, ffmpegArgs, { env });
+        
+        this.metrics.spawn = Date.now() - spawnStart;
+
+        const { pipeline } = require('stream');
 
         this._firstDataTime = null;
+        
         this.ytdlp.stdout.on('data', (chunk) => {
-            if (!this._firstDataTime) {
-                this._firstDataTime = Date.now() - this.startTime;
-            }
             this.bytesReceived += chunk.length;
         });
 
-        this.ytdlp.stdout.pipe(this.ffmpeg.stdin);
+        this.ffmpeg.stdout.on('data', (chunk) => {
+            if (!this._firstDataTime) {
+                this._firstDataTime = Date.now() - this.startTime;
+                this.metrics.firstByte = Date.now() - (startTimestamp + this.metrics.metadata + this.metrics.spawn);
+            }
+            this.bytesSent += chunk.length;
+        });
 
-        let ytdlpError = '';
+        pipeline(this.ytdlp.stdout, this.ffmpeg.stdin, (err) => {
+            if (err && !this.destroyed) {
+                if (err.code !== 'ERR_STREAM_PREMATURE_CLOSE' && err.code !== 'EPIPE') {
+                    log.debug('STREAM', `Pipeline error: ${err.message}`);
+                }
+            }
+        });
+
         this.ytdlp.stderr.on('data', (data) => {
             if (this.destroyed) return;
             const msg = data.toString();
-            ytdlpError += msg;
+            this.ytdlpError += msg;
             if (msg.includes('ERROR:') && !msg.includes('Retrying') && !msg.includes('Broken pipe')) {
                 log.error('YTDLP', msg.trim());
             } else if (!msg.includes('[download]') && !msg.includes('ETA') && !msg.includes('[youtube]') && !msg.includes('Retrying fragment') && !msg.includes('Got error')) {
@@ -145,6 +181,7 @@ class StreamController {
         this.ffmpeg.stderr.on('data', (data) => {
             if (this.destroyed) return;
             const msg = data.toString();
+            this.ffmpegError += msg;
             if ((msg.includes('Error') || msg.includes('error')) && !msg.includes('Connection reset') && !msg.includes('Broken pipe')) {
                 log.error('FFMPEG', msg.trim());
             }
@@ -153,11 +190,11 @@ class StreamController {
         this.ytdlp.on('close', (code) => {
             if (code !== 0 && code !== null && !this.destroyed) {
                 log.error('STREAM', `yt-dlp failed (code: ${code}) for ${videoId}`);
-                if (ytdlpError) {
-                    log.error('STREAM', `yt-dlp stderr: ${ytdlpError.slice(-500)}`);
+                if (this.ytdlpError) {
+                    log.error('STREAM', `yt-dlp stderr: ${this.ytdlpError.slice(-500)}`);
                 }
             }
-            if (this.ffmpeg && !this.ffmpeg.killed) {
+            if (this.ffmpeg && !this.ffmpeg.killed && this.ffmpeg.stdin) {
                 this.ffmpeg.stdin.end();
             }
         });
@@ -199,9 +236,10 @@ class StreamController {
             inlineVolume: false
         });
 
-        const elapsed = Date.now() - this.startTime;
-        const firstData = this._firstDataTime || elapsed;
-        log.info('STREAM', `Ready ${elapsed}ms | First byte: ${firstData}ms | Buffered: ${this.bytesReceived}`);
+        const elapsed = Date.now() - startTimestamp;
+        this.metrics.total = elapsed;
+        
+        log.info('STREAM', `Ready ${elapsed}ms | Metrics: [Metadata: ${this.metrics.metadata}ms | Spawn: ${this.metrics.spawn}ms | FirstByte: ${this.metrics.firstByte}ms] | Buffered: ${this.bytesSent}b`);
 
         return this.resource;
     }
@@ -210,7 +248,7 @@ class StreamController {
         return new Promise((resolve, reject) => {
             const timeoutMs = isLive ? 30000 : 15000;
             const timeout = setTimeout(() => {
-                log.warn('STREAM', `Timeout waiting for data, proceeding anyway (received: ${this.bytesReceived}, isLive: ${isLive})`);
+                log.warn('STREAM', `Timeout waiting for data, proceeding anyway (received: ${this.bytesSent}, isLive: ${isLive})`);
                 resolve();
             }, timeoutMs);
 
@@ -221,7 +259,7 @@ class StreamController {
                     clearInterval(checkInterval);
                     return;
                 }
-                if (this.bytesReceived > 0) {
+                if (this.bytesSent > 0) {
                     resolved = true;
                     clearTimeout(timeout);
                     clearInterval(checkInterval);
@@ -234,7 +272,7 @@ class StreamController {
                     resolved = true;
                     clearTimeout(timeout);
                     clearInterval(checkInterval);
-                    reject(new Error('ffmpeg closed before producing data'));
+                    reject(new Error(`ffmpeg closed before producing data. ffmpeg stderr: ${this.ffmpegError.slice(-200) || 'none'} | yt-dlp stderr: ${this.ytdlpError.slice(-200) || 'none'}`));
                 }
             });
 
@@ -243,7 +281,7 @@ class StreamController {
                     resolved = true;
                     clearTimeout(timeout);
                     clearInterval(checkInterval);
-                    reject(new Error(`yt-dlp failed with code ${code}`));
+                    reject(new Error(`yt-dlp failed with code ${code}. stderr: ${this.ytdlpError.slice(-200) || 'none'}`));
                 }
             });
         });
@@ -254,7 +292,7 @@ class StreamController {
         this.destroyed = true;
 
         const elapsed = this.startTime ? Date.now() - this.startTime : 0;
-        log.info('STREAM', `Destroying stream | Duration: ${elapsed}ms | Received: ${this.bytesReceived}`);
+        log.info('STREAM', `Destroying stream | Duration: ${elapsed}ms | Data Out: ${(this.bytesSent / 1024 / 1024).toFixed(2)} MB`);
 
         try {
             if (this.ytdlp && this.ffmpeg) {

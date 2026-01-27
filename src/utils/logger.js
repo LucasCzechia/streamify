@@ -52,45 +52,67 @@ function formatTime() {
 }
 
 function formatTag(tag, color) {
-    return colorize(color, `[${tag}]`);
+    return colorize(color, `[${tag.toUpperCase()}]`);
 }
 
 function debug(tag, ...args) {
     if (currentLevel < LOG_LEVELS.debug) return;
-    console.log(formatTime(), formatTag(tag, 'gray'), colorize('dim', args.join(' ')));
+    console.log(formatTime(), '🐛', formatTag(tag, 'gray'), colorize('dim', args.join(' ')));
 }
 
 function info(tag, ...args) {
     if (currentLevel < LOG_LEVELS.info) return;
-    console.log(formatTime(), formatTag(tag, 'cyan'), ...args);
+    const tagUpper = tag.toUpperCase();
+    const color = {
+        'MANAGER': 'cyan',
+        'PLAYER': 'blue',
+        'YOUTUBE': 'red',
+        'SPOTIFY': 'green',
+        'SOUNDCLOUD': 'yellow',
+        'STREAM': 'cyan'
+    }[tagUpper] || 'cyan';
+    
+    const emojiMap = {
+        'MANAGER': 'ℹ️ ',
+        'YOUTUBE': '🔴 ',
+        'SPOTIFY': '🟢 ',
+        'SOUNDCLOUD': '🟠 ',
+        'PLAYER': '🔹 ',
+        'STREAM': '🎵 '
+    };
+    
+    const emoji = emojiMap[tagUpper] || '   ';
+    console.log(formatTime(), emoji, formatTag(tag, color), ...args);
 }
 
 function success(tag, ...args) {
     if (currentLevel < LOG_LEVELS.info) return;
-    console.log(formatTime(), formatTag(tag, 'green'), colorize('green', args.join(' ')));
+    console.log(formatTime(), '✅ ', formatTag(tag, 'green'), colorize('green', args.join(' ')));
 }
 
 function warn(tag, ...args) {
     if (currentLevel < LOG_LEVELS.warn) return;
-    console.warn(formatTime(), formatTag(tag, 'yellow'), colorize('yellow', args.join(' ')));
+    console.warn(formatTime(), '⚠️  ', formatTag(tag, 'yellow'), colorize('yellow', args.join(' ')));
 }
 
 function error(tag, ...args) {
     if (currentLevel < LOG_LEVELS.error) return;
-    console.error(formatTime(), formatTag(tag, 'red'), colorize('red', args.join(' ')));
+    console.error(formatTime(), '❌ ', formatTag(tag, 'red'), colorize('red', args.join(' ')));
 }
 
 function stream(source, id, message) {
     if (currentLevel < LOG_LEVELS.debug) return;
-    const sourceColor = {
-        youtube: 'red',
-        spotify: 'green',
-        soundcloud: 'yellow'
-    }[source] || 'white';
+    const sourceMap = {
+        youtube: { color: 'red', emoji: '🔴 ' },
+        spotify: { color: 'green', emoji: '🟢 ' },
+        soundcloud: { color: 'yellow', emoji: '🟠 ' }
+    };
+    const { color, emoji } = sourceMap[source.toLowerCase()] || { color: 'white', emoji: '🎵 ' };
 
     console.log(
         formatTime(),
-        formatTag('STREAM', sourceColor),
+        emoji,
+        colorize('cyan', '[STREAM]'),
         colorize('dim', `[${id}]`),
         message
     );

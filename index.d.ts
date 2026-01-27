@@ -163,6 +163,8 @@ declare module 'streamify-audio' {
         static Manager: typeof Manager;
         static Player: typeof Player;
         static Queue: typeof Queue;
+        static getEffectPresetsInfo(): EffectPresetInfo[];
+        static EFFECT_PRESETS: Record<string, { filters: Filters; description: string }>;
     }
 
     // ========================================================================
@@ -237,6 +239,29 @@ declare module 'streamify-audio' {
         on(event: 'playerDestroy', listener: (player: Player) => void): this;
     }
 
+    export interface PlayOptions {
+        startPosition?: number;
+        seek?: number;
+        volume?: number;
+        filters?: Filters;
+        replace?: boolean;
+    }
+
+    export interface EffectPreset {
+        name: string;
+        intensity?: number;
+    }
+
+    export interface EffectPresetInfo {
+        name: string;
+        description: string;
+        filters: string[];
+    }
+
+    export interface SetEffectPresetsOptions {
+        replace?: boolean;
+    }
+
     export class Player extends EventEmitter {
         constructor(manager: Manager, options: any);
 
@@ -261,7 +286,7 @@ declare module 'streamify-audio' {
         disconnect(): boolean;
         destroy(): void;
 
-        play(track: Track): Promise<void>;
+        play(track: Track, options?: PlayOptions): Promise<void>;
         pause(destroyStream?: boolean): boolean;
         resume(): Promise<boolean>;
         skip(): Promise<Track | null>;
@@ -280,6 +305,11 @@ declare module 'streamify-audio' {
         setPreset(name: string): Promise<boolean>;
         clearEQ(): Promise<boolean>;
         getPresets(): string[];
+
+        setEffectPresets(presets: (string | EffectPreset)[], options?: SetEffectPresetsOptions): Promise<boolean>;
+        getActiveEffectPresets(): EffectPreset[];
+        clearEffectPresets(): Promise<boolean>;
+        getEffectPresets(): string[];
 
         toJSON(): any;
 

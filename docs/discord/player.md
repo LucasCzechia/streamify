@@ -14,13 +14,41 @@ const player = manager.get(guildId);
 
 ## Playback Methods
 
-### play(track)
+### play(track, options?)
 
 Plays a track immediately. If something is playing, adds to queue and skips.
 
 ```javascript
 const result = await manager.search('never gonna give you up');
 await player.play(result.tracks[0]);
+```
+
+**Options:**
+- `startPosition` - Start playback at a specific position in milliseconds
+- `volume` - Set volume before playing (0-200)
+- `filters` - Apply filters before playing
+- `replace` - Replace current track without adding to queue/history
+
+```javascript
+// Start playing at 30 seconds
+await player.play(track, { startPosition: 30000 });
+
+// Start with specific volume
+await player.play(track, { volume: 50 });
+
+// Start with filters applied
+await player.play(track, { filters: { bass: 10, nightcore: true } });
+
+// Replace current track without queueing
+await player.play(track, { replace: true });
+
+// Combine options
+await player.play(track, {
+    startPosition: savedPositionMs,
+    volume: savedVolume,
+    filters: savedFilters,
+    replace: true
+});
 ```
 
 ### pause()
@@ -96,6 +124,57 @@ console.log(player.filters);  // { bass: 10, nightcore: true }
 ```
 
 See [Filters](../filters.md) for all available filters.
+
+## Effect Presets
+
+Effect presets are pre-configured filter combinations that stack by default.
+
+```javascript
+// Apply a single preset
+await player.setEffectPresets(['bassboost']);
+
+// Apply multiple presets (they stack)
+await player.setEffectPresets(['nightcore', 'bassboost']);
+
+// Apply with custom intensity (0.1 - 1.0)
+await player.setEffectPresets([
+    { name: 'nightcore', intensity: 0.8 },
+    { name: 'bassboost', intensity: 0.5 }
+]);
+
+// Replace all presets instead of stacking
+await player.setEffectPresets(['8d'], { replace: true });
+
+// Get active presets
+const active = player.getActiveEffectPresets();
+// [{ name: 'nightcore', intensity: 0.8 }, { name: 'bassboost', intensity: 0.5 }]
+
+// Clear all effect presets
+await player.clearEffectPresets();
+
+// List available presets
+const presets = player.getEffectPresets();
+// ['bassboost', 'nightcore', 'vaporwave', '8d', 'karaoke', ...]
+```
+
+**Available Presets:**
+- `bassboost` - Boost bass frequencies
+- `nightcore` - Speed up with higher pitch
+- `vaporwave` - Slow down with lower pitch
+- `8d` - 8D rotating audio effect
+- `karaoke` - Reduce vocals
+- `trebleboost` - Boost treble frequencies
+- `deep` - Deep bass with lower pitch
+- `lofi` - Lo-fi aesthetic
+- `radio` - Radio/telephone effect
+- `telephone` - Old telephone effect
+- `soft` - Softer, quieter sound
+- `loud` - Louder, compressed sound
+- `chipmunk` - High-pitched voice
+- `darth` - Deep Darth Vader voice
+- `echo` - Echo/reverb effect
+- `vibrato` - Vibrato effect
+- `tremolo` - Tremolo effect
 
 ## Loop Modes
 

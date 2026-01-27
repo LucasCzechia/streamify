@@ -15,7 +15,38 @@ const PRESETS = {
     piano: [0.2, 0.15, 0.1, 0.05, 0, 0.05, 0.1, 0.15, 0.2, 0.2, 0.15, 0.1, 0.1, 0.15, 0.2],
     vocal: [-0.2, -0.15, -0.1, 0, 0.2, 0.35, 0.4, 0.4, 0.35, 0.2, 0, -0.1, -0.15, -0.15, -0.1],
     bass_heavy: [0.5, 0.45, 0.4, 0.3, 0.2, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    treble_heavy: [0, 0, 0, 0, 0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.5]
+    treble_heavy: [0, 0, 0, 0, 0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.5],
+    extra_bass: [0.6, 0.55, 0.5, 0.4, 0.3, 0.2, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
+    crystal_clear: [-0.1, -0.1, -0.05, 0, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.5, 0.5, 0.5]
+};
+
+const EFFECT_PRESETS = {
+    bassboost: { filters: { bass: 12, equalizer: [0.4, 0.3, 0.2, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, description: 'Heavy bass boost' },
+    nightcore: { filters: { speed: 1.25, pitch: 1.25 }, description: 'Speed up with higher pitch' },
+    vaporwave: { filters: { speed: 0.8, pitch: 0.8 }, description: 'Slow down with lower pitch' },
+    '8d': { filters: { rotation: { speed: 0.15 } }, description: '8D rotating audio effect' },
+    karaoke: { filters: { karaoke: true }, description: 'Reduce vocals' },
+    trebleboost: { filters: { treble: 10 }, description: 'Boost treble frequencies' },
+    deep: { filters: { bass: 15, pitch: 0.85, equalizer: [0.5, 0.4, 0.3, 0.2, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, description: 'Deep bass with lower pitch' },
+    lofi: { filters: { lowpass: 2500, bass: 8, treble: -5 }, description: 'Lo-fi aesthetic' },
+    radio: { filters: { highpass: 400, lowpass: 4500, compressor: true }, description: 'Radio/telephone effect' },
+    telephone: { filters: { highpass: 600, lowpass: 3000, compressor: true }, description: 'Old telephone effect' },
+    soft: { filters: { bass: -3, treble: -5, volume: 80, compressor: true }, description: 'Softer, compressed sound' },
+    loud: { filters: { bass: 3, treble: 2, volume: 120, compressor: true, normalizer: true }, description: 'Louder, punchier sound' },
+    chipmunk: { filters: { pitch: 1.6 }, description: 'High-pitched chipmunk voice' },
+    darth: { filters: { pitch: 0.65 }, description: 'Deep Darth Vader voice' },
+    echo: { filters: { echo: true }, description: 'Echo/reverb effect' },
+    vibrato: { filters: { vibrato: { frequency: 6, depth: 0.6 } }, description: 'Vibrato effect' },
+    tremolo: { filters: { tremolo: { frequency: 5, depth: 0.5 } }, description: 'Tremolo effect' },
+    reverb: { filters: { reverb: true }, description: 'Classic reverb effect' },
+    surround: { filters: { surround: true }, description: 'Surround sound effect' },
+    boost: { filters: { volume: 150, treble: 5, bass: 5, compressor: true }, description: 'Boost volume and clarity' },
+    subboost: { filters: { bass: 15, lowpass: 100 }, description: 'Extreme sub-woofer boost' },
+    pop: { filters: { preset: 'pop' }, description: 'Pop EQ preset' },
+    rock: { filters: { preset: 'rock' }, description: 'Rock EQ preset' },
+    electronic: { filters: { preset: 'electronic' }, description: 'Electronic EQ preset' },
+    jazz: { filters: { preset: 'jazz' }, description: 'Jazz EQ preset' },
+    classical: { filters: { preset: 'classical' }, description: 'Classical EQ preset' }
 };
 
 function buildEqualizer(bands) {
@@ -64,11 +95,7 @@ function buildFfmpegArgs(filters = {}, config = {}) {
     const speed = parseFloat(filters.speed);
     if (!isNaN(speed) && speed !== 1) {
         const clampedSpeed = Math.max(0.5, Math.min(2.0, speed));
-        if (clampedSpeed < 1) {
-            audioFilters.push(`atempo=${clampedSpeed}`);
-        } else if (clampedSpeed <= 2) {
-            audioFilters.push(`atempo=${clampedSpeed}`);
-        }
+        audioFilters.push(`atempo=${clampedSpeed}`);
     }
 
     const pitch = parseFloat(filters.pitch);
@@ -185,18 +212,24 @@ function buildFfmpegArgs(filters = {}, config = {}) {
         audioFilters.push('loudnorm');
     }
 
+    if (filters.echo === 'true' || filters.echo === true) {
+        audioFilters.push('aecho=0.8:0.88:60:0.4');
+    }
+
+    if (filters.reverb === 'true' || filters.reverb === true) {
+        audioFilters.push('aecho=0.8:0.88:60:0.4,aecho=0.8:0.88:30:0.2');
+    }
+
     if (filters.nightcore === 'true' || filters.nightcore === true) {
-        audioFilters.push('atempo=1.25');
-        audioFilters.push('asetrate=48000*1.25,aresample=48000');
+        audioFilters.push('atempo=1.25,asetrate=48000*1.25,aresample=48000');
     }
 
     if (filters.vaporwave === 'true' || filters.vaporwave === true) {
-        audioFilters.push('atempo=0.8');
-        audioFilters.push('asetrate=48000*0.8,aresample=48000');
+        audioFilters.push('atempo=0.8,asetrate=48000*0.8,aresample=48000');
     }
 
     if (filters.bassboost === 'true' || filters.bassboost === true) {
-        audioFilters.push('bass=g=10');
+        audioFilters.push('bass=g=10,equalizer=f=40:width_type=h:width=20:g=10');
     }
 
     if (filters['8d'] === 'true' || filters['8d'] === true) {
@@ -255,6 +288,8 @@ function getAvailableFilters() {
         nightcore: { type: 'boolean', description: 'Nightcore preset' },
         vaporwave: { type: 'boolean', description: 'Vaporwave preset' },
         bassboost: { type: 'boolean', description: 'Bass boost preset' },
+        echo: { type: 'boolean', description: 'Echo effect' },
+        reverb: { type: 'boolean', description: 'Reverb effect' },
         '8d': { type: 'boolean', description: '8D audio effect' }
     };
 }
@@ -267,4 +302,59 @@ function getEQBands() {
     return EQ_BANDS;
 }
 
-module.exports = { buildFfmpegArgs, getAvailableFilters, getPresets, getEQBands, PRESETS, EQ_BANDS };
+function getEffectPresets() {
+    return EFFECT_PRESETS;
+}
+
+function getEffectPresetsInfo() {
+    return Object.entries(EFFECT_PRESETS).map(([name, data]) => ({
+        name,
+        description: data.description,
+        filters: Object.keys(data.filters)
+    }));
+}
+
+function applyEffectPreset(name, intensity = 1.0) {
+    const preset = EFFECT_PRESETS[name];
+    if (!preset) return null;
+
+    const filters = {};
+    for (const [key, value] of Object.entries(preset.filters)) {
+        if (typeof value === 'number') {
+            if (key === 'speed' || key === 'pitch') {
+                // Scale relative to 1.0
+                filters[key] = 1.0 + (value - 1.0) * intensity;
+            } else {
+                filters[key] = value * intensity;
+            }
+        } else if (typeof value === 'boolean') {
+            filters[key] = value;
+        } else if (typeof value === 'object') {
+            filters[key] = { ...value };
+            for (const [k, v] of Object.entries(filters[key])) {
+                if (typeof v === 'number') {
+                    if (k === 'speed' || k === 'pitch' || k === 'frequency') {
+                         // Some frequency based ones might also need base values but speed/pitch are most critical
+                         filters[key][k] = 1.0 + (v - 1.0) * intensity;
+                    } else {
+                        filters[key][k] = v * intensity;
+                    }
+                }
+            }
+        }
+    }
+    return filters;
+}
+
+module.exports = {
+    buildFfmpegArgs,
+    getAvailableFilters,
+    getPresets,
+    getEQBands,
+    getEffectPresets,
+    getEffectPresetsInfo,
+    applyEffectPreset,
+    PRESETS,
+    EQ_BANDS,
+    EFFECT_PRESETS
+};

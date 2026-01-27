@@ -93,14 +93,14 @@ class Server {
                 if (!this._isProviderEnabled('youtube')) {
                     return res.status(400).json({ error: 'YouTube provider is disabled' });
                 }
-                const { q, limit = 10 } = req.query;
+                const { q, limit = 10, type, sort } = req.query;
                 if (!q) return res.status(400).json({ error: 'Missing query parameter: q' });
 
-                const cacheKey = `yt:search:${q}:${limit}`;
+                const cacheKey = `yt:search:${q}:${limit}:${type}:${sort}`;
                 const cached = cache.get(cacheKey);
                 if (cached) return res.json(cached);
 
-                const results = await youtube.search(q, parseInt(limit), this.config);
+                const results = await youtube.search(q, parseInt(limit), this.config, { type, sort });
                 cache.set(cacheKey, results, this.config.cache.searchTTL);
                 res.json(results);
             } catch (error) {
@@ -228,7 +228,7 @@ class Server {
 
         this.app.get('/search', async (req, res) => {
             try {
-                const { q, source = 'youtube', limit = 10 } = req.query;
+                const { q, source = 'youtube', limit = 10, type, sort } = req.query;
                 if (!q) return res.status(400).json({ error: 'Missing query parameter: q' });
 
                 let results;
@@ -252,7 +252,7 @@ class Server {
                         if (!this._isProviderEnabled('youtube')) {
                             return res.status(400).json({ error: 'YouTube provider is disabled' });
                         }
-                        results = await youtube.search(q, parseInt(limit), this.config);
+                        results = await youtube.search(q, parseInt(limit), this.config, { type, sort });
                 }
                 res.json(results);
             } catch (error) {

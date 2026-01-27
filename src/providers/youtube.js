@@ -3,22 +3,41 @@ const { buildFfmpegArgs } = require('../filters/ffmpeg');
 const { registerStream, unregisterStream } = require('../utils/stream');
 const log = require('../utils/logger');
 
-async function search(query, limit, config) {
+async function search(query, limit, config, options = {}) {
     const startTime = Date.now();
-    log.info('YOUTUBE', `Searching: "${query}" (limit: ${limit})`);
+    log.info('YOUTUBE', `Searching: "${query}" (limit: ${limit}, type: ${options.type || 'all'}, sort: ${options.sort || 'relevance'})`);
 
     return new Promise((resolve, reject) => {
         const args = [
             '-q', '--no-warnings',
             '--flat-playlist',
             '--skip-download',
-            '-J',
-            `ytsearch${limit}:${query}`
+            '-J'
         ];
 
         if (config.cookiesPath) {
             args.unshift('--cookies', config.cookiesPath);
         }
+
+        let searchQuery = query;
+        
+        // Handle sorting by modifying search query or using filters
+        if (options.sort === 'views' || options.sort === 'popular') {
+            searchQuery += ' most viewed';
+        } else if (options.sort === 'date' || options.sort === 'latest') {
+            searchQuery += ' new';
+        }
+
+        // Handle type filtering
+        if (options.type === 'live') {
+            args.push('--match-filter', 'live_status = is_live');
+        } else if (options.type === 'playlist') {
+            args.push('--match-filter', 'playlist_count > 0');
+        } else if (options.type === 'video') {
+            args.push('--match-filter', 'live_status != is_live');
+        }
+
+        args.push(`ytsearch${limit}:${searchQuery}`);
 
         const proc = spawn(config.ytdlpPath, args, {
             env: { ...process.env, PATH: '/usr/local/bin:/root/.deno/bin:' + process.env.PATH }

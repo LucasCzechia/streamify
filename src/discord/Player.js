@@ -1,6 +1,7 @@
 const { EventEmitter } = require('events');
 const Queue = require('./Queue');
 const { createStream } = require('./Stream');
+const { applyEffectPreset, EFFECT_PRESETS } = require('../filters/ffmpeg');
 const log = require('../utils/logger');
 
 let voiceModule;
@@ -35,6 +36,7 @@ class Player extends EventEmitter {
 
         this._volume = options.volume || manager.config.defaultVolume || 80;
         this._filters = {};
+        this._effectPresets = [];
         this._playing = false;
         this._paused = false;
         this._positionTimestamp = 0;
@@ -45,6 +47,7 @@ class Player extends EventEmitter {
         this._prefetchedTrack = null;
         this._prefetching = false;
         this._changingStream = false;
+        this._manualSkip = false;
 
         this.autoLeave = {
             enabled: options.autoLeave?.enabled ?? true,
@@ -195,15 +198,17 @@ class Player extends EventEmitter {
 
             this.emit('trackEnd', track, 'finished');
 
-            const next = this.queue.shift();
-            if (next) {
-                this._playTrack(next);
-            } else {
-                if (this.autoplay.enabled && track) {
-                    await this._handleAutoplay(track);
+            if (!this._manualSkip) {
+                const next = this.queue.shift();
+                if (next) {
+                    this._playTrack(next);
                 } else {
-                    this.emit('queueEnd');
-                    this._resetInactivityTimeout();
+                    if (this.autoplay.enabled && track) {
+                        await this._handleAutoplay(track);
+                    } else {
+                        this.emit('queueEnd');
+                        this._resetInactivityTimeout();
+                    }
                 }
             }
         });
@@ -213,6 +218,10 @@ class Player extends EventEmitter {
         });
 
         this.audioPlayer.on('error', (error) => {
+            if (this._manualSkip || this._changingStream) {
+                return;
+            }
+
             if (error.message === 'Premature close' || error.message.includes('EPIPE')) {
                 return;
             }
@@ -229,7 +238,8 @@ class Player extends EventEmitter {
 
             const next = this.queue.shift();
             if (next) {
-                this._playTrack(next);
+                // Use setImmediate to break recursion stack on consecutive failures
+                setImmediate(() => this._playTrack(next));
             } else {
                 this.emit('queueEnd');
             }
@@ -252,7 +262,7 @@ class Player extends EventEmitter {
         });
     }
 
-    async play(track) {
+    async play(track, options = {}) {
         if (this._destroyed) {
             throw new Error('Player has been destroyed');
         }
@@ -261,19 +271,40 @@ class Player extends EventEmitter {
             await this.connect();
         }
 
-        if (this.queue.current) {
+        const playOptions = {
+            startPosition: options.startPosition || options.seek || 0,
+            volume: options.volume,
+            filters: options.filters,
+            replace: options.replace || false
+        };
+
+        if (options.volume !== undefined) {
+            this._volume = Math.max(0, Math.min(200, options.volume));
+        }
+
+        if (options.filters) {
+            this._filters = { ...this._filters, ...options.filters };
+        }
+
+        if (this.queue.current && !playOptions.replace) {
             this.queue.add(track, 0);
             return this.skip();
         }
 
+        if (playOptions.replace && this.stream) {
+            this.stream.destroy();
+            this.stream = null;
+        }
+
         this.queue.setCurrent(track);
-        return this._playTrack(track);
+        return this._playTrack(track, playOptions.startPosition);
     }
 
-    async _playTrack(track) {
+    async _playTrack(track, startPosition = 0) {
         if (!track) return;
 
-        log.info('PLAYER', `Playing: ${track.title} (${track.id})`);
+        const seekInfo = startPosition > 0 ? ` @ ${Math.floor(startPosition / 1000)}s` : '';
+        log.info('PLAYER', `Playing: ${track.title} (${track.id})${seekInfo}`);
         this.emit('trackStart', track);
 
         try {
@@ -282,8 +313,8 @@ class Player extends EventEmitter {
                 volume: this._volume
             };
 
-            if (this._prefetchedTrack?.id === track.id && this._prefetchedStream) {
-                log.info('PLAYER', `Using prefetched stream for ${track.id}`);
+            if (startPosition === 0 && this._prefetchedTrack?.id === track.id && this._prefetchedStream) {
+                log.debug('PLAYER', `Using prefetched stream for ${track.id}`);
                 this.stream = this._prefetchedStream;
                 this._prefetchedStream = null;
                 this._prefetchedTrack = null;
@@ -292,12 +323,12 @@ class Player extends EventEmitter {
                 this.stream = createStream(track, filtersWithVolume, this.config);
             }
 
-            const resource = await this.stream.create();
+            const resource = await this.stream.create(startPosition);
 
             this.audioPlayer.play(resource);
             this._playing = true;
             this._paused = false;
-            this._positionMs = 0;
+            this._positionMs = startPosition;
             this._positionTimestamp = Date.now();
 
             this._prefetchNext();
@@ -306,10 +337,15 @@ class Player extends EventEmitter {
         } catch (error) {
             log.error('PLAYER', `Failed to play track: ${error.message}`);
             this.emit('trackError', track, error);
+            
+            // If manual skip is active, we just return so the skip function handles it
+            if (this._manualSkip) return;
 
             const next = this.queue.shift();
             if (next) {
-                return this._playTrack(next);
+                // Use setImmediate to break recursion stack on consecutive failures
+                setImmediate(() => this._playTrack(next));
+                return;
             } else {
                 this.emit('queueEnd');
             }
@@ -325,7 +361,7 @@ class Player extends EventEmitter {
         this._prefetching = true;
         this._clearPrefetch();
 
-        log.info('PLAYER', `Prefetching: ${nextTrack.title} (${nextTrack.id})`);
+        log.debug('PLAYER', `Prefetching: ${nextTrack.title} (${nextTrack.id})`);
 
         try {
             const filtersWithVolume = {
@@ -337,7 +373,7 @@ class Player extends EventEmitter {
             this._prefetchedStream = createStream(nextTrack, filtersWithVolume, this.config);
             await this._prefetchedStream.create();
 
-            log.info('PLAYER', `Prefetch ready: ${nextTrack.id}`);
+            log.debug('PLAYER', `Prefetch ready: ${nextTrack.id}`);
         } catch (error) {
             log.debug('PLAYER', `Prefetch failed: ${error.message}`);
             this._clearPrefetch();
@@ -403,7 +439,7 @@ class Player extends EventEmitter {
         }
 
         this.audioPlayer.stop(true);
-        log.info('PLAYER', `Paused at ${Math.floor(this._positionMs / 1000)}s (stream destroyed)`);
+        log.info('PLAYER', `Paused playback at ${Math.floor(this._positionMs / 1000)}s (Reason: User Request)`);
 
         return true;
     }
@@ -412,7 +448,7 @@ class Player extends EventEmitter {
         if (!this._playing || !this._paused) return false;
 
         if (!this.stream && this.queue.current) {
-            log.info('PLAYER', `Resuming from ${Math.floor(this._positionMs / 1000)}s (recreating stream)`);
+            log.info('PLAYER', `Resuming playback from ${Math.floor(this._positionMs / 1000)}s`);
 
             this._changingStream = true;
             const track = this.queue.current;
@@ -458,8 +494,21 @@ class Player extends EventEmitter {
             this.stream = null;
         }
 
+        this._manualSkip = true;
+        const next = this.queue.shift();
         this.audioPlayer.stop();
-        return this.queue.current;
+
+        log.info('PLAYER', `Skipping track (Next: ${next ? next.title : 'End of queue'})`);
+
+        try {
+            if (next) {
+                await this._playTrack(next);
+            }
+        } finally {
+            this._manualSkip = false;
+        }
+
+        return this.queue.current || next;
     }
 
     async previous() {
@@ -472,8 +521,18 @@ class Player extends EventEmitter {
             this.stream = null;
         }
 
+        this._manualSkip = true;
         this.audioPlayer.stop();
-        return this._playTrack(prev);
+        
+        log.info('PLAYER', `Rewinding to previous track: ${prev.title}`);
+
+        try {
+            await this._playTrack(prev);
+        } finally {
+            this._manualSkip = false;
+        }
+
+        return this.queue.current || prev;
     }
 
     stop() {
@@ -490,11 +549,16 @@ class Player extends EventEmitter {
         this._positionMs = 0;
         this.queue.clear();
         this.queue.setCurrent(null);
+        
+        log.info('PLAYER', 'Stopped playback and cleared queue');
+        
         return true;
     }
 
     setVolume(volume) {
+        const oldVolume = this._volume;
         this._volume = Math.max(0, Math.min(200, volume));
+        log.info('PLAYER', `Volume adjusted: ${oldVolume}% -> ${this._volume}%`);
         return this._volume;
     }
 
@@ -513,6 +577,8 @@ class Player extends EventEmitter {
             this.stream.destroy();
         }
 
+        log.info('PLAYER', `Seeking to ${Math.floor(positionMs / 1000)}s`);
+
         try {
             this.stream = createStream(track, filtersWithVolume, this.config);
             const resource = await this.stream.create(positionMs);
@@ -528,6 +594,7 @@ class Player extends EventEmitter {
     }
 
     setLoop(mode) {
+        log.info('PLAYER', `Loop mode changed to: ${mode.toUpperCase()}`);
         return this.queue.setRepeatMode(mode);
     }
 
@@ -565,6 +632,7 @@ class Player extends EventEmitter {
 
     async clearFilters() {
         this._filters = {};
+        log.info('PLAYER', 'All audio filters cleared');
         if (this._playing && this.queue.current) {
             return this.setFilter('_trigger', null);
         }
@@ -575,6 +643,7 @@ class Player extends EventEmitter {
         if (!Array.isArray(bands) || bands.length !== 15) {
             throw new Error('EQ must be an array of 15 band gains (-0.25 to 1.0)');
         }
+        log.info('PLAYER', 'Applying custom 15-band Equalizer');
         return this.setFilter('equalizer', bands);
     }
 
@@ -584,12 +653,14 @@ class Player extends EventEmitter {
             throw new Error(`Unknown preset: ${presetName}. Available: ${Object.keys(PRESETS).join(', ')}`);
         }
         delete this._filters.equalizer;
+        log.info('PLAYER', `Applying EQ preset: ${presetName.toUpperCase()}`);
         return this.setFilter('preset', presetName);
     }
 
     async clearEQ() {
         delete this._filters.equalizer;
         delete this._filters.preset;
+        log.info('PLAYER', 'Equalizer cleared');
         if (this._playing && this.queue.current) {
             return this.setFilter('_trigger', null);
         }
@@ -599,6 +670,74 @@ class Player extends EventEmitter {
     getPresets() {
         const { PRESETS } = require('../filters/ffmpeg');
         return Object.keys(PRESETS);
+    }
+
+    async setEffectPresets(presets, options = {}) {
+        if (!Array.isArray(presets)) {
+            presets = [presets];
+        }
+
+        const replace = options.replace ?? false;
+        const newPresets = [];
+
+        for (const preset of presets) {
+            const name = typeof preset === 'string' ? preset : preset.name;
+            const intensity = typeof preset === 'object' ? (preset.intensity ?? 1.0) : 1.0;
+
+            if (!EFFECT_PRESETS[name]) {
+                log.warn('PLAYER', `Unknown effect preset: ${name}`);
+                continue;
+            }
+            newPresets.push({ name, intensity });
+        }
+
+        if (replace) {
+            this._effectPresets = newPresets;
+        } else {
+            const existingNames = this._effectPresets.map(p => p.name);
+            for (const preset of newPresets) {
+                const idx = existingNames.indexOf(preset.name);
+                if (idx >= 0) {
+                    this._effectPresets[idx] = preset;
+                } else {
+                    this._effectPresets.push(preset);
+                }
+            }
+        }
+
+        // Re-calculate all filters from active presets
+        this._filters = {};
+        for (const preset of this._effectPresets) {
+            const filters = applyEffectPreset(preset.name, preset.intensity);
+            if (filters) {
+                Object.assign(this._filters, filters);
+            }
+        }
+
+        log.info('PLAYER', `Active effects: ${this._effectPresets.map(p => p.name).join(' + ') || 'NONE'}`);
+
+        if (this._playing && this.queue.current) {
+            return this.setFilter('_trigger', null);
+        }
+        return true;
+    }
+
+    getActiveEffectPresets() {
+        return [...this._effectPresets];
+    }
+
+    async clearEffectPresets() {
+        this._effectPresets = [];
+        this._filters = {};
+        log.info('PLAYER', 'All effect presets cleared');
+        if (this._playing && this.queue.current) {
+            return this.setFilter('_trigger', null);
+        }
+        return true;
+    }
+
+    getEffectPresets() {
+        return Object.keys(EFFECT_PRESETS);
     }
 
     disconnect() {

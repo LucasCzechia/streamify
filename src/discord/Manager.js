@@ -217,7 +217,7 @@ class Manager extends EventEmitter {
                     if (!this._isProviderEnabled('youtube')) {
                         throw new Error('YouTube provider is disabled');
                     }
-                    result = await youtube.search(query, limit, this.config);
+                    result = await youtube.search(query, limit, this.config, options);
                     break;
 
                 case 'spotify':
