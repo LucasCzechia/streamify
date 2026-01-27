@@ -399,11 +399,11 @@ class Player extends EventEmitter {
         }
     }
 
-    async _updateVoiceChannelStatus(track) {
+    async _updateVoiceChannelStatus(track, force = false) {
         if (!this.voiceChannelStatus.enabled || !track) return;
 
         const now = Date.now();
-        if (now - this._lastStatusUpdate < 300000) {
+        if (!force && now - this._lastStatusUpdate < 300000) {
             log.debug('PLAYER', 'Skipping voice channel status update due to rate limit');
             return;
         }
@@ -529,7 +529,7 @@ class Player extends EventEmitter {
                 this._positionTimestamp = Date.now();
 
                 this._prefetchNext();
-                this._updateVoiceChannelStatus(track);
+                this._updateVoiceChannelStatus(track, true);
             } catch (error) {
                 log.error('PLAYER', `Resume failed: ${error.message}`);
                 this._paused = false;
@@ -543,7 +543,7 @@ class Player extends EventEmitter {
             this.audioPlayer.unpause();
             this._paused = false;
             this._positionTimestamp = Date.now();
-            this._updateVoiceChannelStatus(this.queue.current);
+            this._updateVoiceChannelStatus(this.queue.current, true);
         }
 
         return true;
