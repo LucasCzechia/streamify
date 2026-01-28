@@ -24,7 +24,14 @@ const defaults = {
     },
     audio: {
         bitrate: '128k',
-        format: 'opus'
+        format: 'opus',
+        vbr: true,
+        compressionLevel: 10,
+        application: 'audio'
+    },
+    ytdlp: {
+        format: 'bestaudio/bestaudio[ext=webm]/bestaudio[ext=mp4]/18/22/best',
+        additionalArgs: []
     },
     cache: {
         enabled: true,
@@ -93,6 +100,11 @@ function load(options = {}) {
             ...defaults.audio,
             ...fileConfig.audio,
             ...options.audio
+        },
+        ytdlp: {
+            ...defaults.ytdlp,
+            ...fileConfig.ytdlp,
+            ...options.ytdlp
         },
         cache: {
             ...defaults.cache,

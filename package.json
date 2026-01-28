@@ -8,8 +8,9 @@
     "streamify": "bin/streamify.js"
   },
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js --dev"
+    "start": "UV_THREADPOOL_SIZE=64 node --noconcurrent-sweeping --max-old-space-size=2048 --expose-gc index.js",
+    "dev": "UV_THREADPOOL_SIZE=64 node --noconcurrent-sweeping --max-old-space-size=2048 --expose-gc index.js --dev",
+    "test": "node --test tests/*.test.js"
   },
   "keywords": [
     "discord",

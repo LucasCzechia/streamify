@@ -33,6 +33,21 @@ Both modes share the same providers, filters, and streaming engine.
 
 ---
 
+## 🎵 Supported Sources
+
+Streamify is built to be a universal audio engine. It supports:
+
+- **YouTube**: Videos, Music, Shorts, Live, Playlists
+- **Spotify**: Tracks, Albums, Playlists (resolved to YouTube)
+- **SoundCloud**: Tracks
+- **Twitch**: Live streams
+- **Mixcloud**: Mixes and DJ sets
+- **Bandcamp**: Tracks and Albums
+- **Direct URLs**: Public raw audio links (MP3, OGG, WAV, etc.)
+- **Local Files**: Absolute or relative paths on the host system
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
@@ -135,6 +150,13 @@ When running in HTTP mode, Streamify exposes a REST API:
 | `GET` | `/spotify/stream/:id` | Stream Spotify track |
 | `GET` | `/soundcloud/search?q=query` | Search SoundCloud |
 | `GET` | `/soundcloud/stream/:id` | Stream SoundCloud track |
+| `GET` | `/twitch/stream/:channel` | Stream Twitch live |
+| `GET` | `/mixcloud/stream/:id` | Stream Mixcloud set |
+| `GET` | `/bandcamp/stream/:id` | Stream Bandcamp track |
+| `GET` | `/http/stream/:base64_url` | Stream from direct URL |
+| `GET` | `/local/stream/:base64_path` | Stream local file |
+| `GET` | `/search?q=query&source=...` | Generic search across providers |
+| `GET` | `/stream/:source/:id` | Generic stream endpoint |
 
 ### Stream Parameters
 
@@ -171,12 +193,15 @@ audio.play();
 | Feature | Discord | HTTP |
 |---------|:-------:|:----:|
 | 🎵 YouTube, Spotify, SoundCloud | ✅ | ✅ |
+| 🎮 Twitch, Mixcloud, Bandcamp | ✅ | ✅ |
+| 📁 Local Files & Direct URLs | ✅ | ✅ |
 | 📺 **Voice Channel Status** | ✅ | — |
 | 🔍 **Advanced Search Filters** | ✅ | ✅ |
 | 📋 Playlists & Albums | ✅ | ✅ |
 | 🎚️ 30+ Stackable Filters | ✅ | ✅ |
 | 🎛️ 15-Band Equalizer | ✅ | ✅ |
 | 🎨 15 EQ Presets | ✅ | ✅ |
+| 🔄 **Seamless Transitions** | ✅ | ✅ |
 | ⏭️ Instant Skip (prefetch) | ✅ | — |
 | ⏸️ Auto-pause when alone | ✅ | — |
 | ▶️ Auto-resume on rejoin | ✅ | — |
@@ -378,7 +403,10 @@ const manager = new Streamify.Manager(client, {
     providers: {
         youtube: { enabled: true },
         spotify: { enabled: true },
-        soundcloud: { enabled: false }  // Disable SoundCloud
+        soundcloud: { enabled: true },
+        twitch: { enabled: true },
+        mixcloud: { enabled: true },
+        bandcamp: { enabled: true }
     },
     spotify: {
         clientId: 'your_client_id',
@@ -386,7 +414,14 @@ const manager = new Streamify.Manager(client, {
     },
     audio: {
         bitrate: '128k',
-        format: 'opus'
+        format: 'opus',
+        vbr: true,
+        compressionLevel: 10,
+        application: 'audio'
+    },
+    ytdlp: {
+        format: 'bestaudio/best',
+        additionalArgs: []
     },
     defaultVolume: 80,
     maxPreviousTracks: 25,
@@ -409,7 +444,10 @@ const streamify = new Streamify({
     providers: {
         youtube: { enabled: true },
         spotify: { enabled: true },
-        soundcloud: { enabled: true }
+        soundcloud: { enabled: true },
+        twitch: { enabled: true },
+        mixcloud: { enabled: true },
+        bandcamp: { enabled: true }
     },
     spotify: {
         clientId: 'your_client_id',
@@ -417,7 +455,14 @@ const streamify = new Streamify({
     },
     audio: {
         bitrate: '128k',
-        format: 'opus'
+        format: 'opus',
+        vbr: true,
+        compressionLevel: 10,
+        application: 'audio'
+    },
+    ytdlp: {
+        format: 'bestaudio/best',
+        additionalArgs: []
     },
     logLevel: 'info'
 });

@@ -72,7 +72,7 @@ Searches for tracks.
 
 - `query` (string) - The search term or URL
 - `options` (object) - Search configuration
-    - `source` (string) - `youtube`, `spotify`, or `soundcloud`
+    - `source` (string) - `youtube`, `spotify`, `soundcloud`, `twitch`, `mixcloud`, `bandcamp`, `local`, `http`
     - `limit` (number) - Number of results (default: 10)
     - `type` (string) - `video`, `live`, or `all` (YouTube only)
     - `sort` (string) - `relevance`, `popularity`, `date`, or `rating` (YouTube only)

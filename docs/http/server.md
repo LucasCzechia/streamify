@@ -95,6 +95,8 @@ const results = await streamify.search('youtube', 'query', 10);
 const results = await streamify.youtube.search('query');
 const results = await streamify.spotify.search('query');
 const results = await streamify.soundcloud.search('query');
+const info = await streamify.twitch.getInfo('channel');
+const url = streamify.local.getStreamUrl('/path/to/file.mp3');
 ```
 
 ### Get Info

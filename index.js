@@ -100,7 +100,7 @@ class Streamify extends EventEmitter {
     async search(source, query, limit = 10) {
         if (!this.running) throw new Error('Streamify not started. Call .start() first');
 
-        switch (source) {
+        switch (source.toLowerCase()) {
             case 'youtube':
             case 'yt':
                 return youtube.search(query, limit, this.config);
@@ -110,6 +110,21 @@ class Streamify extends EventEmitter {
             case 'soundcloud':
             case 'sc':
                 return soundcloud.search(query, limit, this.config);
+            case 'twitch':
+                const twitch = require('./src/providers/twitch');
+                return { tracks: [await twitch.getInfo(query, this.config)], source: 'twitch' };
+            case 'mixcloud':
+                const mixcloud = require('./src/providers/mixcloud');
+                return { tracks: [await mixcloud.getInfo(query, this.config)], source: 'mixcloud' };
+            case 'bandcamp':
+                const bandcamp = require('./src/providers/bandcamp');
+                return { tracks: [await bandcamp.getInfo(query, this.config)], source: 'bandcamp' };
+            case 'http':
+                const http = require('./src/providers/http');
+                return { tracks: [await http.getInfo(query, this.config)], source: 'http' };
+            case 'local':
+                const local = require('./src/providers/local');
+                return { tracks: [await local.getInfo(query, this.config)], source: 'local' };
             default:
                 throw new Error(`Unknown source: ${source}`);
         }
@@ -118,13 +133,26 @@ class Streamify extends EventEmitter {
     async getInfo(source, id) {
         if (!this.running) throw new Error('Streamify not started. Call .start() first');
 
-        switch (source) {
+        switch (source.toLowerCase()) {
             case 'youtube':
             case 'yt':
                 return youtube.getInfo(id, this.config);
             case 'spotify':
             case 'sp':
                 return spotify.getInfo(id, this.config);
+            case 'soundcloud':
+            case 'sc':
+                return soundcloud.getInfo(id, this.config);
+            case 'twitch':
+                return require('./src/providers/twitch').getInfo(id, this.config);
+            case 'mixcloud':
+                return require('./src/providers/mixcloud').getInfo(id, this.config);
+            case 'bandcamp':
+                return require('./src/providers/bandcamp').getInfo(id, this.config);
+            case 'http':
+                return require('./src/providers/http').getInfo(id, this.config);
+            case 'local':
+                return require('./src/providers/local').getInfo(id, this.config);
             default:
                 throw new Error(`Unknown source: ${source}`);
         }
@@ -134,7 +162,7 @@ class Streamify extends EventEmitter {
         if (!this.config) throw new Error('Streamify not started. Call .start() first');
 
         let endpoint;
-        switch (source) {
+        switch (source.toLowerCase()) {
             case 'youtube':
             case 'yt':
                 endpoint = `/youtube/stream/${id}`;
@@ -146,6 +174,13 @@ class Streamify extends EventEmitter {
             case 'soundcloud':
             case 'sc':
                 endpoint = `/soundcloud/stream/${id}`;
+                break;
+            case 'twitch':
+            case 'mixcloud':
+            case 'bandcamp':
+            case 'http':
+            case 'local':
+                endpoint = `/stream/${source.toLowerCase()}/${encodeURIComponent(id)}`;
                 break;
             default:
                 throw new Error(`Unknown source: ${source}`);
@@ -189,6 +224,31 @@ class Streamify extends EventEmitter {
         search: (query, limit = 10) => this.search('soundcloud', query, limit),
         getStreamUrl: (id, filters = {}) => this.getStreamUrl('soundcloud', id, filters),
         getStream: (id, filters = {}) => this.getStream('soundcloud', id, filters)
+    };
+
+    twitch = {
+        getInfo: (id) => this.getInfo('twitch', id),
+        getStreamUrl: (id, filters = {}) => this.getStreamUrl('twitch', id, filters)
+    };
+
+    mixcloud = {
+        getInfo: (id) => this.getInfo('mixcloud', id),
+        getStreamUrl: (id, filters = {}) => this.getStreamUrl('mixcloud', id, filters)
+    };
+
+    bandcamp = {
+        getInfo: (id) => this.getInfo('bandcamp', id),
+        getStreamUrl: (id, filters = {}) => this.getStreamUrl('bandcamp', id, filters)
+    };
+
+    http = {
+        getInfo: (url) => this.getInfo('http', url),
+        getStreamUrl: (url, filters = {}) => this.getStreamUrl('http', url, filters)
+    };
+
+    local = {
+        getInfo: (path) => this.getInfo('local', path),
+        getStreamUrl: (path, filters = {}) => this.getStreamUrl('local', path, filters)
     };
 
     async getActiveStreams() {

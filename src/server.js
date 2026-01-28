@@ -2,6 +2,11 @@ const express = require('express');
 const youtube = require('./providers/youtube');
 const spotify = require('./providers/spotify');
 const soundcloud = require('./providers/soundcloud');
+const twitch = require('./providers/twitch');
+const mixcloud = require('./providers/mixcloud');
+const bandcamp = require('./providers/bandcamp');
+const httpProvider = require('./providers/http');
+const localProvider = require('./providers/local');
 const cache = require('./cache');
 const { getActiveStreams, getStreamById, getStreamPosition } = require('./utils/stream');
 const log = require('./utils/logger');
@@ -248,6 +253,26 @@ class Server {
                         }
                         results = await soundcloud.search(q, parseInt(limit), this.config);
                         break;
+                    case 'twitch':
+                        results = await twitch.getInfo(q, this.config);
+                        results = { tracks: [results], source: 'twitch' };
+                        break;
+                    case 'mixcloud':
+                        results = await mixcloud.getInfo(q, this.config);
+                        results = { tracks: [results], source: 'mixcloud' };
+                        break;
+                    case 'bandcamp':
+                        results = await bandcamp.getInfo(q, this.config);
+                        results = { tracks: [results], source: 'bandcamp' };
+                        break;
+                    case 'local':
+                        results = await localProvider.getInfo(q, this.config);
+                        results = { tracks: [results], source: 'local' };
+                        break;
+                    case 'http':
+                        results = await httpProvider.getInfo(q, this.config);
+                        results = { tracks: [results], source: 'http' };
+                        break;
                     default:
                         if (!this._isProviderEnabled('youtube')) {
                             return res.status(400).json({ error: 'YouTube provider is disabled' });
@@ -263,6 +288,29 @@ class Server {
 
         this.app.get('/stream/:source/:id', (req, res) => {
             const { source, id } = req.params;
+            const { createStream } = require('./discord/Stream');
+            
+            async function handleGenericStream(id, source, filters, config, res) {
+                try {
+                    const provider = require(`./providers/${source}`);
+                    const info = await provider.getInfo(id, config);
+                    const stream = createStream(info, filters, config);
+                    
+                    res.setHeader('Content-Type', 'audio/ogg');
+                    res.setHeader('Transfer-Encoding', 'chunked');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.flushHeaders();
+
+                    const resource = await stream.create(filters.seek ? parseInt(filters.seek) : 0);
+                    resource.playStream.pipe(res);
+                    
+                    res.on('close', () => stream.destroy());
+                } catch (error) {
+                    log.error('SERVER', `Stream failed: ${error.message}`);
+                    if (!res.headersSent) res.status(500).json({ error: error.message });
+                }
+            }
+
             switch (source) {
                 case 'youtube':
                     if (!this._isProviderEnabled('youtube')) {
@@ -281,6 +329,13 @@ class Server {
                         return res.status(400).json({ error: 'SoundCloud provider is disabled' });
                     }
                     soundcloud.stream(id, req.query, this.config, res);
+                    break;
+                case 'twitch':
+                case 'mixcloud':
+                case 'bandcamp':
+                case 'local':
+                case 'http':
+                    handleGenericStream(id, source, req.query, this.config, res);
                     break;
                 default:
                     res.status(400).json({ error: 'Invalid source' });

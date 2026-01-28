@@ -1,6 +1,6 @@
 # Sources
 
-Streamify supports YouTube, Spotify, and SoundCloud.
+Streamify supports YouTube, Spotify, SoundCloud, Twitch, Mixcloud, Bandcamp, Local Files, and Direct URLs.
 
 ## Supported Features
 
@@ -9,6 +9,11 @@ Streamify supports YouTube, Spotify, and SoundCloud.
 | YouTube | ✅ | ✅ | ✅ | — |
 | Spotify | ✅ | ✅ | ✅ | ✅ |
 | SoundCloud | ✅ | ✅ | ❌ | — |
+| Twitch | ✅ | ✅ | — | — |
+| Mixcloud | ✅ | ✅ | — | — |
+| Bandcamp | ✅ | ✅ | — | ✅ |
+| Direct URL | ✅ | ✅ | — | — |
+| Local File | ✅ | ✅ | — | — |
 
 ## YouTube
 
@@ -106,6 +111,50 @@ const result = await manager.resolve('https://soundcloud.com/rick-astley-officia
 
 - `soundcloud.com/USER/TRACK`
 
+## Twitch & Mixcloud
+
+Streaming support for live content and DJ sets.
+
+```javascript
+// Twitch Live
+await manager.resolve('https://twitch.tv/monstercat');
+
+// Mixcloud Sets
+await manager.resolve('https://www.mixcloud.com/spinninrecords/spinnin-sessions-550/');
+```
+
+## Bandcamp
+
+Support for high-quality independent music.
+
+```javascript
+await manager.resolve('https://monstercatmedia.bandcamp.com/track/the-governor');
+```
+
+## Direct URLs (HTTP)
+
+Play raw audio files from any public URL.
+
+```javascript
+await manager.resolve('https://example.com/audio.mp3');
+await manager.resolve('https://cdn.discordapp.com/attachments/.../music.ogg');
+```
+
+## Local Files
+
+Play files directly from the host system.
+
+```javascript
+// Absolute path
+await manager.resolve('/home/user/music/track.mp3');
+
+// Relative path
+await manager.resolve('./assets/sound-effect.wav');
+
+// File URI
+await manager.resolve('file:///var/lib/music/song.flac');
+```
+
 ## Auto-Detection
 
 The `resolve()` method auto-detects the source from URLs:
@@ -115,9 +164,8 @@ The `resolve()` method auto-detects the source from URLs:
 await manager.resolve('https://youtube.com/watch?v=dQw4w9WgXcQ');
 await manager.resolve('https://open.spotify.com/track/4PTG3Z6ehGkBFwjybzWkR8');
 await manager.resolve('https://soundcloud.com/rick-astley-official/never-gonna-give-you-up');
-
-// Falls back to YouTube search
-await manager.resolve('never gonna give you up');
+await manager.resolve('https://twitch.tv/some-channel');
+await manager.resolve('/path/to/local/file.mp3');
 ```
 
 ## Track Object

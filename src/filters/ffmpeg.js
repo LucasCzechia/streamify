@@ -67,7 +67,13 @@ function buildEqualizer(bands) {
 }
 
 function buildFfmpegArgs(filters = {}, config = {}) {
-    const args = ['-i', 'pipe:0', '-vn'];
+    const args = [
+        '-thread_queue_size', '4096',
+        '-copyts',
+        '-start_at_zero',
+        '-i', 'pipe:0',
+        '-vn'
+    ];
     const audioFilters = [];
 
     if (filters.equalizer && Array.isArray(filters.equalizer)) {
@@ -244,7 +250,14 @@ function buildFfmpegArgs(filters = {}, config = {}) {
     const format = config.audio?.format || 'opus';
 
     if (format === 'opus') {
-        args.push('-acodec', 'libopus', '-b:a', bitrate, '-f', 'ogg');
+        args.push(
+            '-acodec', 'libopus',
+            '-b:a', bitrate,
+            '-vbr', config.audio?.vbr !== false ? 'on' : 'off',
+            '-compression_level', (config.audio?.compressionLevel ?? 10).toString(),
+            '-application', config.audio?.application || 'audio',
+            '-f', 'ogg'
+        );
     } else if (format === 'mp3') {
         args.push('-acodec', 'libmp3lame', '-b:a', bitrate, '-f', 'mp3');
     } else if (format === 'aac') {
@@ -329,6 +342,8 @@ function applyEffectPreset(name, intensity = 1.0) {
             }
         } else if (typeof value === 'boolean') {
             filters[key] = value;
+        } else if (Array.isArray(value)) {
+            filters[key] = value.map(v => typeof v === 'number' ? v * intensity : v);
         } else if (typeof value === 'object') {
             filters[key] = { ...value };
             for (const [k, v] of Object.entries(filters[key])) {
