@@ -100,6 +100,31 @@ GET /soundcloud/stream/:trackUrl
 
 Note: `trackUrl` should be URL-encoded.
 
+## Generic Routes
+
+### Search
+
+```
+GET /search?q=query&source=youtube&limit=10
+```
+
+**Query Parameters:**
+- `q` - Search query
+- `source` - `youtube`, `spotify`, `soundcloud`, `twitch`, `mixcloud`, `bandcamp`, `local`, `http`
+- `limit` - Number of results
+
+### Stream
+
+```
+GET /stream/:source/:id
+```
+
+**Example:**
+```
+GET /stream/twitch/monstercat
+GET /stream/local/L2hvbWUvdXNlci9tdXNpYy9zbmFyZS53YXY= (Base64 path)
+```
+
 ## Stream Management
 
 ### List Active Streams

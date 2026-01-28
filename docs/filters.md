@@ -1,6 +1,6 @@
 # Audio Filters
 
-Filters are applied in real-time via ffmpeg. When you change a filter during playback, Streamify recreates the stream and seeks to the current position.
+Filters are applied in real-time via ffmpeg. When you change a filter during playback, Streamify uses **Seamless Transitions** to prepare the new stream in the background and swap it instantly once ready, ensuring no audio gaps.
 
 ## Available Filters
 

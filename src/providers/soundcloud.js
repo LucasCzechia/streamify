@@ -155,7 +155,11 @@ function stream(trackUrl, filters, config, res) {
         log.info('SOUNDCLOUD', `Stream ended: ${trackUrl} | ${elapsed}ms | Code: ${code}`);
         cleanup(code);
     });
-    ytdlp.on('close', () => ffmpeg.stdin.end());
+    ytdlp.on('close', () => {
+        if (ffmpeg.stdin) {
+            try { ffmpeg.stdin.end(); } catch (e) {}
+        }
+    });
     res.on('close', () => {
         const elapsed = Date.now() - streamStartTime;
         log.info('SOUNDCLOUD', `Client disconnected: ${trackUrl} | ${elapsed}ms`);

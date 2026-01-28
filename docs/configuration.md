@@ -27,7 +27,16 @@ const manager = new Streamify.Manager(client, {
     // Audio settings
     audio: {
         bitrate: '128k',      // Audio bitrate
-        format: 'opus'        // opus, mp3, aac
+        format: 'opus',       // opus, mp3, aac
+        vbr: true,            // Enable Variable Bitrate (Opus only)
+        compressionLevel: 10, // Opus compression level (0-10)
+        application: 'audio'  // Opus application (audio, voip, lowdelay)
+    },
+
+    // yt-dlp settings
+    ytdlp: {
+        format: 'bestaudio/best', // Custom yt-dlp format string
+        additionalArgs: []        // Extra arguments for yt-dlp (e.g. proxy)
     },
 
     // Defaults
@@ -105,7 +114,16 @@ const streamify = new Streamify({
     // Audio
     audio: {
         bitrate: '128k',
-        format: 'opus'
+        format: 'opus',
+        vbr: true,
+        compressionLevel: 10,
+        application: 'audio'
+    },
+
+    // yt-dlp
+    ytdlp: {
+        format: 'bestaudio/best',
+        additionalArgs: []
     },
 
     // Logging

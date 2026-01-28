@@ -215,7 +215,9 @@ async function stream(videoId, filters, config, res) {
         if (code !== 0 && code !== null) {
             log.debug('YOUTUBE', `yt-dlp ended for ${videoId} (code: ${code})`);
         }
-        ffmpeg.stdin.end();
+        if (ffmpeg.stdin) {
+            try { ffmpeg.stdin.end(); } catch (e) {}
+        }
     });
 
     res.on('close', () => {

@@ -191,7 +191,7 @@ class Player extends EventEmitter {
 
     _setupListeners() {
         this.audioPlayer.on(AudioPlayerStatus.Idle, async () => {
-            if (!this._playing || this._changingStream || this._paused) return;
+            if (!this._playing || this._changingStream || this._paused || this._manualSkip) return;
 
             const track = this.queue.current;
             this._playing = false;
@@ -311,29 +311,34 @@ class Player extends EventEmitter {
     async _playTrack(track, startPosition = 0) {
         if (!track) return;
 
-        const seekInfo = startPosition > 0 ? ` @ ${Math.floor(startPosition / 1000)}s` : '';
-        log.info('PLAYER', `Playing: ${track.title} (${track.id})${seekInfo}`);
+        log.info('PLAYER', `Playing: ${track.title} (${track.id})` + (startPosition > 0 ? ` @ ${Math.floor(startPosition / 1000)}s` : ''));
         this.emit('trackStart', track);
 
+        let newStream = null;
         try {
-            const filtersWithVolume = {
-                ...this._filters,
-                volume: this._volume
-            };
+            const filtersWithVolume = { ...this._filters, volume: this._volume };
 
             if (startPosition === 0 && this._prefetchedTrack?.id === track.id && this._prefetchedStream) {
                 log.debug('PLAYER', `Using prefetched stream for ${track.id}`);
-                this.stream = this._prefetchedStream;
+                newStream = this._prefetchedStream;
                 this._prefetchedStream = null;
                 this._prefetchedTrack = null;
             } else {
-                this._clearPrefetch();
-                this.stream = createStream(track, filtersWithVolume, this.config);
+                // If not using prefetch, we don't clear it yet in case we need to fallback
+                newStream = createStream(track, filtersWithVolume, this.config);
             }
 
-            const resource = await this.stream.create(startPosition);
+            const resource = await newStream.create(startPosition);
 
+            // SEAMLESS SWAP: Only destroy old stream AFTER the new one is ready
+            const oldStream = this.stream;
+            this.stream = newStream;
             this.audioPlayer.play(resource);
+
+            if (oldStream && oldStream !== newStream) {
+                oldStream.destroy();
+            }
+
             this._playing = true;
             this._paused = false;
             this._positionMs = startPosition;
@@ -344,17 +349,21 @@ class Player extends EventEmitter {
 
             return track;
         } catch (error) {
+            if (newStream && newStream !== this.stream) {
+                newStream.destroy();
+            }
+
+            if (this._manualSkip || this._changingStream || error.message.includes('Stream destroyed')) {
+                log.debug('PLAYER', `Playback cancelled for ${track.id}`);
+                return;
+            }
+
             log.error('PLAYER', `Failed to play track: ${error.message}`);
             this.emit('trackError', track, error);
             
-            // If manual skip is active, we just return so the skip function handles it
-            if (this._manualSkip) return;
-
             const next = this.queue.shift();
             if (next) {
-                // Use setImmediate to break recursion stack on consecutive failures
                 setImmediate(() => this._playTrack(next));
-                return;
             } else {
                 this.emit('queueEnd');
             }
@@ -550,19 +559,16 @@ class Player extends EventEmitter {
     }
 
     async skip() {
-        if (!this._playing && this.queue.isEmpty) {
-            return null;
-        }
+        if (!this._playing && this.queue.isEmpty) return null;
 
-        if (this.stream) {
-            this.stream.destroy();
-            this.stream = null;
-        }
-
+        this._changingStream = true;
         this._manualSkip = true;
-        const next = this.queue.shift();
-        this.audioPlayer.stop();
 
+        const track = this.queue.current;
+        const next = this.queue.shift();
+        
+        this.audioPlayer.stop(); // Triggers Idle if playing, but guards will catch it
+        this.emit('trackEnd', track, 'skipped');
         log.info('PLAYER', `Skipping track (Next: ${next ? next.title : 'End of queue'})`);
 
         try {
@@ -571,30 +577,35 @@ class Player extends EventEmitter {
             }
         } finally {
             this._manualSkip = false;
+            this._changingStream = false;
         }
 
         return this.queue.current || next;
     }
 
     async previous() {
+        this._changingStream = true;
+        this._manualSkip = true;
         this._clearPrefetch();
-        const prev = this.queue.unshift();
-        if (!prev) return null;
 
-        if (this.stream) {
-            this.stream.destroy();
-            this.stream = null;
+        const prev = this.queue.unshift();
+        if (!prev) {
+            this._manualSkip = false;
+            this._changingStream = false;
+            return null;
         }
 
-        this._manualSkip = true;
+        const track = this.queue.current;
         this.audioPlayer.stop();
         
+        this.emit('trackEnd', track, 'skipped');
         log.info('PLAYER', `Rewinding to previous track: ${prev.title}`);
 
         try {
             await this._playTrack(prev);
         } finally {
             this._manualSkip = false;
+            this._changingStream = false;
         }
 
         return this.queue.current || prev;
@@ -603,18 +614,21 @@ class Player extends EventEmitter {
     stop() {
         this._clearPrefetch();
 
+        const track = this.queue.current;
         if (this.stream) {
             this.stream.destroy();
             this.stream = null;
         }
 
-        this.audioPlayer.stop();
         this._playing = false;
         this._paused = false;
+        this.audioPlayer.stop();
+        
         this._positionMs = 0;
         this.queue.clear();
         this.queue.setCurrent(null);
         
+        this.emit('trackEnd', track, 'stopped');
         log.info('PLAYER', 'Stopped playback and cleared queue');
         this._clearVoiceChannelStatus();
         
@@ -632,31 +646,16 @@ class Player extends EventEmitter {
         if (!this._playing || !this.queue.current) return false;
 
         this._changingStream = true;
-
         const track = this.queue.current;
-        const filtersWithVolume = {
-            ...this._filters,
-            volume: this._volume
-        };
-
-        if (this.stream) {
-            this.stream.destroy();
-        }
 
         log.info('PLAYER', `Seeking to ${Math.floor(positionMs / 1000)}s`);
 
         try {
-            this.stream = createStream(track, filtersWithVolume, this.config);
-            const resource = await this.stream.create(positionMs);
-
-            this.audioPlayer.play(resource);
-            this._positionMs = positionMs;
-            this._positionTimestamp = Date.now();
+            await this._playTrack(track, positionMs);
+            return true;
         } finally {
             this._changingStream = false;
         }
-
-        return true;
     }
 
     setLoop(mode) {
@@ -669,25 +668,8 @@ class Player extends EventEmitter {
 
         if (this._playing && this.queue.current) {
             this._changingStream = true;
-
-            const currentPos = this.position;
-            const track = this.queue.current;
-            const filtersWithVolume = {
-                ...this._filters,
-                volume: this._volume
-            };
-
-            if (this.stream) {
-                this.stream.destroy();
-            }
-
             try {
-                this.stream = createStream(track, filtersWithVolume, this.config);
-                const resource = await this.stream.create(currentPos);
-
-                this.audioPlayer.play(resource);
-                this._positionMs = currentPos;
-                this._positionTimestamp = Date.now();
+                await this._playTrack(this.queue.current, this.position);
             } finally {
                 this._changingStream = false;
             }

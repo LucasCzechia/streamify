@@ -3,6 +3,11 @@ const Player = require('./Player');
 const youtube = require('../providers/youtube');
 const spotify = require('../providers/spotify');
 const soundcloud = require('../providers/soundcloud');
+const twitch = require('../providers/twitch');
+const mixcloud = require('../providers/mixcloud');
+const bandcamp = require('../providers/bandcamp');
+const httpProvider = require('../providers/http');
+const localProvider = require('../providers/local');
 const log = require('../utils/logger');
 const { loadConfig } = require('../config');
 
@@ -267,6 +272,31 @@ class Manager extends EventEmitter {
                     result = await soundcloud.search(query, limit, this.config);
                     break;
 
+                case 'twitch':
+                    result = await twitch.getInfo(query, this.config);
+                    result = { tracks: [result], source: 'twitch' };
+                    break;
+
+                case 'mixcloud':
+                    result = await mixcloud.getInfo(query, this.config);
+                    result = { tracks: [result], source: 'mixcloud' };
+                    break;
+
+                case 'bandcamp':
+                    result = await bandcamp.getInfo(query, this.config);
+                    result = { tracks: [result], source: 'bandcamp' };
+                    break;
+
+                case 'local':
+                    result = await localProvider.getInfo(query, this.config);
+                    result = { tracks: [result], source: 'local' };
+                    break;
+
+                case 'http':
+                    result = await httpProvider.getInfo(query, this.config);
+                    result = { tracks: [result], source: 'http' };
+                    break;
+
                 default:
                     if (!this._isProviderEnabled('youtube')) {
                         throw new Error('YouTube provider is disabled');
@@ -312,6 +342,21 @@ class Manager extends EventEmitter {
                         throw new Error('SoundCloud provider is disabled');
                     }
                     return await soundcloud.getInfo(id, this.config);
+
+                case 'twitch':
+                    return await twitch.getInfo(id, this.config);
+
+                case 'mixcloud':
+                    return await mixcloud.getInfo(id, this.config);
+
+                case 'bandcamp':
+                    return await bandcamp.getInfo(id, this.config);
+
+                case 'local':
+                    return await localProvider.getInfo(id, this.config);
+
+                case 'http':
+                    return await httpProvider.getInfo(id, this.config);
 
                 default:
                     if (!this._isProviderEnabled('youtube')) {
@@ -379,6 +424,15 @@ class Manager extends EventEmitter {
             soundcloud: [
                 /soundcloud\.com\/([^\/]+\/[^\/\?]+)/,
                 /api\.soundcloud\.com\/tracks\/(\d+)/
+            ],
+            twitch: [
+                /twitch\.tv\/([a-zA-Z0-9_]+)/
+            ],
+            mixcloud: [
+                /mixcloud\.com\/([^\/]+\/[^\/]+)/
+            ],
+            bandcamp: [
+                /[a-zA-Z0-9-]+\.bandcamp\.com\/(track|album)\/([a-zA-Z0-9-]+)/
             ]
         };
 
@@ -390,10 +444,22 @@ class Manager extends EventEmitter {
             }
         }
 
+        if (input.startsWith('/') || input.startsWith('./') || input.startsWith('file://')) {
+            return 'local';
+        }
+
+        if (input.startsWith('http') && /\.(mp3|wav|ogg|flac|m4a|aac)(\?.*)?$/i.test(input)) {
+            return 'http';
+        }
+
         return null;
     }
 
     _extractId(input, source) {
+        if (['twitch', 'mixcloud', 'bandcamp', 'local', 'http'].includes(source)) {
+            return { source, id: input };
+        }
+
         const patterns = {
             youtube: /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|music\.youtube\.com\/watch\?v=|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
             youtube_playlist: /youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/,
