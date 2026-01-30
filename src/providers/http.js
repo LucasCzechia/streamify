@@ -3,10 +3,20 @@ const log = require('../utils/logger');
 async function getInfo(url, config) {
     log.info('HTTP', `Getting info for direct URL: ${url}`);
 
-    // For direct URLs, we can't easily get metadata without downloading or using ffprobe
-    // For now, we'll return a basic object. 
-    // In a full implementation, we might use ffprobe here.
-    
+    if (!url || typeof url !== 'string') {
+        throw new Error('Invalid URL: URL must be a non-empty string');
+    }
+
+    try {
+        new URL(url);
+    } catch (e) {
+        throw new Error(`Invalid URL format: ${url}`);
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        throw new Error(`Invalid URL protocol: ${url}`);
+    }
+
     const filename = url.split('/').pop().split('?')[0] || 'Direct Audio';
 
     return {

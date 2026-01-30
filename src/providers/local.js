@@ -12,6 +12,11 @@ async function getInfo(filePath, config) {
         throw new Error(`File not found: ${absolutePath}`);
     }
 
+    const stats = fs.statSync(absolutePath);
+    if (stats.isDirectory()) {
+        throw new Error(`Path is a directory, not a file: ${absolutePath}`);
+    }
+
     const filename = path.basename(absolutePath);
 
     return {

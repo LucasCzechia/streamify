@@ -1,6 +1,6 @@
 {
   "name": "streamify-audio",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "description": "Dual-mode audio library: HTTP streaming proxy + Discord player (Lavalink alternative). Supports YouTube, Spotify, SoundCloud with audio filters.",
   "main": "index.js",
   "types": "index.d.ts",

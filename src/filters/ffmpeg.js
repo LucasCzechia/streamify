@@ -67,14 +67,18 @@ function buildEqualizer(bands) {
 }
 
 function buildFfmpegArgs(filters = {}, config = {}) {
+    filters = filters || {};
     const args = [
         '-thread_queue_size', '4096',
+        '-probesize', '128K',
+        '-analyzeduration', '0',
+        '-fflags', '+discardcorrupt',
         '-copyts',
         '-start_at_zero',
         '-i', 'pipe:0',
         '-vn'
     ];
-    const audioFilters = [];
+    const audioFilters = ['aresample=async=1:first_pts=0'];
 
     if (filters.equalizer && Array.isArray(filters.equalizer)) {
         const eq = buildEqualizer(filters.equalizer);

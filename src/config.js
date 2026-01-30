@@ -68,6 +68,7 @@ function checkYtdlpVersion(ytdlpPath) {
 }
 
 function load(options = {}) {
+    options = options || {};
     let fileConfig = {};
 
     if (options.configPath && fs.existsSync(options.configPath)) {

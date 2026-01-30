@@ -382,27 +382,21 @@ class Player extends EventEmitter {
         if (this._prefetching || this.queue.tracks.length === 0) return;
 
         const nextTrack = this.queue.tracks[0];
-        if (!nextTrack || this._prefetchedTrack?.id === nextTrack.id) return;
+        if (!nextTrack || nextTrack._directUrl) return; // Already prefetched or resolved
 
         this._prefetching = true;
-        this._clearPrefetch();
-
-        log.debug('PLAYER', `Prefetching: ${nextTrack.title} (${nextTrack.id})`);
+        log.debug('PLAYER', `Prefetching metadata: ${nextTrack.title}`);
 
         try {
-            const filtersWithVolume = {
-                ...this._filters,
-                volume: this._volume
-            };
-
-            this._prefetchedTrack = nextTrack;
-            this._prefetchedStream = createStream(nextTrack, filtersWithVolume, this.config);
-            await this._prefetchedStream.create();
-
-            log.debug('PLAYER', `Prefetch ready: ${nextTrack.id}`);
+            // Only resolve the metadata and stream URL
+            const result = await this.manager.getInfo(nextTrack.id, nextTrack.source);
+            if (result) {
+                // Merge prefetch data into the existing queue object
+                Object.assign(nextTrack, result);
+                log.debug('PLAYER', `Prefetch ready (Metadata only): ${nextTrack.id}`);
+            }
         } catch (error) {
             log.debug('PLAYER', `Prefetch failed: ${error.message}`);
-            this._clearPrefetch();
         } finally {
             this._prefetching = false;
         }

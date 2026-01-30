@@ -46,6 +46,10 @@ async function search(query, limit, config, options = {}) {
         let stdout = '';
         let stderr = '';
 
+        proc.on('error', (err) => {
+            reject(new Error(`yt-dlp spawn error: ${err.message}`));
+        });
+
         proc.stdout.on('data', (data) => { stdout += data; });
         proc.stderr.on('data', (data) => { stderr += data; });
 
@@ -55,17 +59,25 @@ async function search(query, limit, config, options = {}) {
             }
             try {
                 const data = JSON.parse(stdout);
-                const tracks = (data.entries || []).map(entry => ({
-                    id: entry.id,
-                    title: entry.title,
-                    duration: entry.duration || 0,
-                    author: entry.channel || entry.uploader,
-                    thumbnail: entry.thumbnails?.[0]?.url,
-                    uri: `https://www.youtube.com/watch?v=${entry.id}`,
-                    streamUrl: `/youtube/stream/${entry.id}`,
-                    source: 'youtube',
-                    isLive: entry.live_status === 'is_live' || entry.is_live === true || !entry.duration
-                }));
+                const tracks = (data.entries || []).map(entry => {
+                    const bestAudio = entry.formats
+                        ?.filter(f => f.vcodec === 'none' && f.acodec !== 'none')
+                        .sort((a, b) => (b.abr || 0) - (a.abr || 0))[0];
+
+                    return {
+                        id: entry.id,
+                        title: entry.title,
+                        duration: entry.duration || 0,
+                        author: entry.channel || entry.uploader,
+                        thumbnail: entry.thumbnails?.[0]?.url,
+                        uri: `https://www.youtube.com/watch?v=${entry.id}`,
+                        streamUrl: `/youtube/stream/${entry.id}`,
+                        source: 'youtube',
+                        isLive: entry.live_status === 'is_live' || entry.is_live === true || !entry.duration,
+                        _directUrl: bestAudio?.url || null,
+                        _headers: entry.http_headers || data.http_headers || null
+                    };
+                });
                 const elapsed = Date.now() - startTime;
                 log.info('YOUTUBE', `Found ${tracks.length} results (${elapsed}ms)`);
                 resolve({ tracks, source: 'youtube', searchTime: elapsed });
@@ -108,6 +120,12 @@ async function getInfo(videoId, config) {
             try {
                 const data = JSON.parse(stdout);
                 const isLive = data.live_status === 'is_live' || data.is_live === true || !data.duration;
+                
+                // Extract best audio-only format for direct piping
+                const bestAudio = data.formats
+                    ?.filter(f => f.vcodec === 'none' && f.acodec !== 'none')
+                    .sort((a, b) => (b.abr || 0) - (a.abr || 0))[0];
+
                 resolve({
                     id: data.id,
                     title: data.title,
@@ -117,7 +135,9 @@ async function getInfo(videoId, config) {
                     uri: data.webpage_url,
                     streamUrl: `/youtube/stream/${data.id}`,
                     source: 'youtube',
-                    isLive
+                    isLive,
+                    _directUrl: bestAudio?.url || null,
+                    _headers: data.http_headers || null
                 });
             } catch (e) {
                 reject(new Error('Failed to parse yt-dlp output'));

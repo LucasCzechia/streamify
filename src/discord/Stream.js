@@ -96,6 +96,11 @@ class StreamController {
             // Skip yt-dlp for local files
             ffmpegIn = 'pipe:0'; // We'll just pass the file path to ffmpeg -i
             this.metrics.spawn = Date.now() - spawnStart;
+        } else if (this.track._directUrl && !isLive && seekPosition === 0) {
+            // OPTIMIZATION: Bypass yt-dlp if we already have a direct stream URL
+            ffmpegIn = this.track._directUrl;
+            log.info('STREAM', `Bypassing yt-dlp, using direct URL for ${videoId}`);
+            this.metrics.spawn = 0;
         } else {
             let url;
             if (source === 'soundcloud') {
@@ -157,15 +162,31 @@ class StreamController {
         const ffmpegFilters = { ...this.filters };
         const ffmpegArgs = buildFfmpegArgs(ffmpegFilters, this.config);
         
-        // If local, inject the input file before other args
+        // Input injection - only override if NOT using pipe:0 (buildFfmpegArgs already includes -i pipe:0)
         if (isLocal) {
             const filePath = this.track.absolutePath || videoId.replace('file://', '');
-            ffmpegArgs.unshift('-i', filePath);
-            if (seekPosition > 0) {
-                const seekSeconds = (seekPosition / 1000).toFixed(3);
-                ffmpegArgs.unshift('-ss', seekSeconds);
+            const pipeIndex = ffmpegArgs.indexOf('pipe:0');
+            if (pipeIndex > 0) {
+                ffmpegArgs[pipeIndex] = filePath;
+                if (seekPosition > 0) {
+                    const seekSeconds = (seekPosition / 1000).toFixed(3);
+                    ffmpegArgs.splice(pipeIndex - 1, 0, '-ss', seekSeconds);
+                }
+            }
+        } else if (ffmpegIn !== 'pipe:0') {
+            // Direct URL - replace the pipe:0 input with the direct URL
+            const pipeIndex = ffmpegArgs.indexOf('pipe:0');
+            if (pipeIndex > 0) {
+                ffmpegArgs[pipeIndex] = ffmpegIn;
+                if (this.track._headers) {
+                    const headers = Object.entries(this.track._headers)
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join('\r\n');
+                    ffmpegArgs.splice(pipeIndex - 1, 0, '-headers', headers);
+                }
             }
         }
+        // else: pipe:0 - buildFfmpegArgs already has -i pipe:0, nothing to change
 
         this.ffmpeg = spawn(this.config.ffmpegPath, ffmpegArgs, { env });
         this.metrics.spawn = Date.now() - spawnStart;
@@ -225,6 +246,7 @@ class StreamController {
     _waitForData(isLive = false) {
         const ffmpeg = this.ffmpeg;
         const ytdlp = this.ytdlp;
+        const MIN_BUFFER_SIZE = 32 * 1024;
 
         return new Promise((resolve, reject) => {
             if (!ffmpeg) return resolve();
@@ -236,28 +258,37 @@ class StreamController {
             }, timeoutMs);
 
             let resolved = false;
+            let bufferedSize = 0;
+            let firstByteRecorded = false;
 
-            // USE READABLE EVENT: Zero-consumption way to detect data
-            const onReadable = () => {
-                if (!resolved) {
+            const checkBuffer = () => {
+                if (resolved) return;
+
+                if (!firstByteRecorded && ffmpeg.stdout && ffmpeg.stdout.readableLength > 0) {
+                    firstByteRecorded = true;
+                    this.metrics.firstByte = Date.now() - (this.startTime + this.metrics.metadata + this.metrics.spawn);
+                }
+
+                bufferedSize = ffmpeg.stdout ? ffmpeg.stdout.readableLength : 0;
+
+                if (bufferedSize >= MIN_BUFFER_SIZE) {
                     resolved = true;
                     clearTimeout(timeout);
-                    this.metrics.firstByte = Date.now() - (this.startTime + this.metrics.metadata + this.metrics.spawn);
-                    if (ffmpeg.stdout) ffmpeg.stdout.removeListener('readable', onReadable);
+                    if (ffmpeg.stdout) ffmpeg.stdout.removeListener('readable', checkBuffer);
                     resolve();
                 }
             };
 
             if (ffmpeg.stdout) {
-                ffmpeg.stdout.on('readable', onReadable);
+                ffmpeg.stdout.on('readable', checkBuffer);
             }
 
             ffmpeg.on('close', () => {
                 if (!resolved) {
                     resolved = true;
                     clearTimeout(timeout);
-                    if (ffmpeg.stdout) ffmpeg.stdout.removeListener('readable', onReadable);
-                    
+                    if (ffmpeg.stdout) ffmpeg.stdout.removeListener('readable', checkBuffer);
+
                     if (this.destroyed) {
                         return reject(new Error('Stream destroyed during initialization'));
                     }
@@ -272,12 +303,12 @@ class StreamController {
                     if (!resolved && code !== 0 && code !== null) {
                         resolved = true;
                         clearTimeout(timeout);
-                        if (ffmpeg.stdout) ffmpeg.stdout.removeListener('readable', onReadable);
+                        if (ffmpeg.stdout) ffmpeg.stdout.removeListener('readable', checkBuffer);
 
                         if (this.destroyed) {
                             return reject(new Error('Stream destroyed during initialization'));
                         }
-                        
+
                         reject(new Error(`yt-dlp failed with code ${code}`));
                     }
                 });

@@ -56,6 +56,7 @@ function cleanup() {
     }
 }
 
-setInterval(cleanup, 60000);
+const cleanupInterval = setInterval(cleanup, 60000);
+cleanupInterval.unref();
 
 module.exports = { get, set, del, clear, stats };
